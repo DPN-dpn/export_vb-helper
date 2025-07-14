@@ -1,16 +1,16 @@
 import tkinter as tk
+from tkinter import ttk
+import os
 from common import REQUIRED_COMPONENT_KEYS
 from tkinter import filedialog
-import os
 
 class UIComponents:
     def __init__(self, root):
         self.root = root
         self.matcher = None
-        self.component_vars = []
-        self.component_paths = []
         self.asset_path_var = tk.StringVar(value="(선택 안 됨)")
         self.mod_path_var = tk.StringVar(value="(선택 안 됨)")
+        self.component_widgets = []  # 리스트: 각 컴포넌트의 {key: Combobox} 맵
 
     def ask_folder(self, title):
         return filedialog.askdirectory(title=title, initialdir=os.getcwd())
@@ -39,36 +39,32 @@ class UIComponents:
 
         self.inner_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
 
-    def display_component_sets(self, sets, logger):
+    def display_components(self, components, logger, mod_files_by_type):
         for widget in self.inner_frame.winfo_children():
             widget.destroy()
+        self.component_widgets.clear()
 
-        for idx, comp in enumerate(sets):
-            group = tk.LabelFrame(self.inner_frame, text=f"컴포넌트 세트 {idx+1}")
+        for idx, comp in enumerate(components):
+            group = tk.LabelFrame(self.inner_frame, text=comp.get("name"))
             group.pack(fill="x", padx=10, pady=5)
 
-            comp_vars = {}
-            comp_paths = {}
+            widget_row = {}
 
             for key in REQUIRED_COMPONENT_KEYS:
                 row = tk.Frame(group)
                 row.pack(fill="x", pady=2)
 
                 tk.Label(row, text=key, width=12).pack(side="left")
-                var = tk.StringVar(value=comp.get(key) or "")
-                entry = tk.Entry(row, textvariable=var, width=80)
-                entry.pack(side="left", padx=5)
 
-                def picker(k=key, v=var):
-                    path = filedialog.askopenfilename(initialdir=os.getcwd())
-                    if path:
-                        v.set(path)
-                        logger.log(f"[수정] {k} → {path}")
+                hash_val = comp.get(key) or ""
+                tk.Label(row, text=hash_val, width=15, anchor="w", bg="#f0f0f0").pack(side="left", padx=5)
 
-                tk.Button(row, text="파일 선택", command=picker).pack(side="right")
+                # 후보 항목에서 드롭다운 리스트 구성
+                candidates = mod_files_by_type.get(key, [])
+                selected = tk.StringVar()
+                box = ttk.Combobox(row, textvariable=selected, values=candidates, width=80, state="readonly")
+                box.pack(side="left", padx=5)
 
-                comp_vars[key] = var
-                comp_paths[key] = comp.get(key)
+                widget_row[key] = box
 
-            self.component_vars.append(comp_vars)
-            self.component_paths.append(comp_paths)
+            self.component_widgets.append(widget_row)
