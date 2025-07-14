@@ -30,40 +30,43 @@ class ComponentMatcherApp:
         self.ui.display_components(self.components, by_type)
 
     def load_components_from_hash_json(self, folder):
-        path = os.path.join(folder, "hash.json")
-        if not os.path.isfile(path):
-            self.ui.log("에셋 폴더에 hash.json이 없습니다.")
-            return
-
         try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-        except json.JSONDecodeError as e:
-            self.ui.log(f"hash.json 파싱 실패: {e}")
-            return
+            path = os.path.join(folder, "hash.json")
+            if not os.path.isfile(path):
+                self.ui.log("에셋 폴더에 hash.json이 없습니다.")
+                return
 
-        components = []
-        for entry in data:
-            comp = {k: None for k in REQUIRED_COMPONENT_KEYS}
-            comp["ib"] = entry.get("ib")
-            comp["position"] = entry.get("position_vb")
-            comp["texcoord"] = entry.get("texcoord_vb")
-            comp["blend"] = entry.get("blend_vb")
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+            except json.JSONDecodeError as e:
+                self.ui.log(f"hash.json 파싱 실패: {e}")
+                return
 
-            textures = entry.get("texture_hashes", [])
-            if textures:
-                for tex_type, _, tex_hash in textures[0]:
-                    key = tex_type.lower()
-                    if key in comp:
-                        comp[key] = tex_hash
-                    elif key == "highlightmap":
-                        comp["materialmap"] = tex_hash
+            components = []
+            for entry in data:
+                comp = {k: None for k in REQUIRED_COMPONENT_KEYS}
+                comp["ib"] = entry.get("ib")
+                comp["position"] = entry.get("position_vb")
+                comp["texcoord"] = entry.get("texcoord_vb")
+                comp["blend"] = entry.get("blend_vb")
 
-            comp["name"] = entry.get("component_name", "Unnamed")
-            components.append(comp)
+                textures = entry.get("texture_hashes", [])
+                if textures:
+                    for tex_type, _, tex_hash in textures[0]:
+                        key = tex_type.lower()
+                        if key in comp:
+                            comp[key] = tex_hash
+                        elif key == "highlightmap":
+                            comp["materialmap"] = tex_hash
 
-        self.components = components
-        self.ui.display_components(self.components, {})
+                comp["name"] = entry.get("component_name", "Unnamed")
+                components.append(comp)
+
+            self.components = components
+            self.ui.display_components(self.components, {})
+        except Exception as e:
+            self.ui.log(f"[오류] 컴포넌트 로딩 실패: {e}")
 
     def _categorize_files_by_type(self, files):
         by_type = {k: [] for k in REQUIRED_COMPONENT_KEYS}

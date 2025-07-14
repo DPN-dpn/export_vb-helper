@@ -46,9 +46,13 @@ class UIComponents:
 
     def assign_selected_file(self):
         if not self.selected_slot or not self.selected_file:
+            self.log("[경고] 슬롯 또는 파일이 선택되지 않았습니다.")
             return
-        index, key = self.selected_slot
-        self.slot_panel.set_slot_value(index, key, self.selected_file)
+        try:
+            index, key = self.selected_slot
+            self.slot_panel.set_slot_value(index, key, self.selected_file)
+        except Exception as e:
+            self.log(f"[오류] 슬롯에 파일 할당 중 오류 발생: {e}")
 
     def display_components(self, components, mod_files_by_type):
         self.slot_panel.display_components(components, mod_files_by_type)

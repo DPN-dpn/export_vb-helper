@@ -66,7 +66,6 @@ class ComponentSlotPanel(tk.Frame):
 
             title_label.bind("<Button-1>", toggle)
 
-            # 이벤트 핸들러는 내부 루프 전에 정의
             def make_click_handler(i, k):
                 return lambda e: self.select_slot(i, k)
 
@@ -96,8 +95,8 @@ class ComponentSlotPanel(tk.Frame):
                 clear_btn = tk.Button(row, text="X", command=make_clear_handler(idx, key), fg="red", width=2)
                 clear_btn.grid(row=0, column=3, padx=2, sticky="e")
 
-                row.columnconfigure(2, weight=1)  # file_label은 늘어나게
-                row.columnconfigure(3, weight=0)  # 버튼은 고정
+                row.columnconfigure(2, weight=1)
+                row.columnconfigure(3, weight=0)
 
                 self.slot_labels.append((idx, key, key_label, hash_label, file_label))
                 widget_row[key] = val
@@ -113,6 +112,8 @@ class ComponentSlotPanel(tk.Frame):
         self.set_slot_highlight(index, key, True)
 
         self.controller.set_selected_slot(index, key)
+        comp_name = self.controller.matcher.components[index].get("name", f"컴포넌트 {index+1}")
+        self.controller.log(f"[선택] {comp_name} - {key} 슬롯 선택됨")
 
     def set_slot_highlight(self, index, key, selected):
         for i, k, key_lbl, hash_lbl, file_lbl in self.slot_labels:
@@ -125,6 +126,11 @@ class ComponentSlotPanel(tk.Frame):
 
     def set_slot_value(self, index, key, value):
         self.component_widgets[index][key].set(value)
+        comp_name = self.controller.matcher.components[index].get("name", f"컴포넌트 {index+1}")
+        if value:
+            self.controller.log(f"[할당] {comp_name} - {key} ← {value}")
+        else:
+            self.controller.log(f"[비움] {comp_name} - {key} 슬롯이 비워졌습니다.")
 
     def get_component_values(self):
         return self.component_widgets
