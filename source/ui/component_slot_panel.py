@@ -17,62 +17,87 @@ class ComponentSlotPanel(tk.Frame):
         self.scrollbar.pack(side="right", fill="y")
 
         self.inner_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-
         self.canvas.bind("<Configure>", self._resize_inner_frame)
 
-        self.component_widgets = []  # 각 컴포넌트의 {key: stringvar, ...}
-        self.slot_labels = []        # 선택 시 강조할 label 모음
+        self.component_widgets = []
+        self.slot_labels = []
         self.selected_index = None
         self.selected_key = None
+        self.group_contents = []
 
     def display_components(self, components, mod_files_by_type):
         for widget in self.inner_frame.winfo_children():
             widget.destroy()
         self.component_widgets.clear()
         self.slot_labels.clear()
+        self.group_contents.clear()
 
         for idx, comp in enumerate(components):
-            group = tk.LabelFrame(self.inner_frame, text=comp.get("name", f"컴포넌트 {idx+1}"))
-            group.pack(fill="x", padx=10, pady=5, expand=True)
+            outer_frame = tk.Frame(self.inner_frame)
+            outer_frame.pack(fill="x", padx=10, pady=5, expand=True)
+
+            is_expanded = tk.BooleanVar(value=True)
+            comp_name = comp.get("name", f"컴포넌트 {idx+1}")
+
+            title_label = tk.Label(
+                outer_frame,
+                text=f"▼ {comp_name}",
+                font=("Arial", 10, "bold"),
+                anchor="w",
+                cursor="hand2",
+                bg="#ddd",
+                padx=5, pady=2
+            )
+            title_label.pack(fill="x")  # 타이틀 라벨 먼저 패킹
+
+            content_frame = tk.Frame(outer_frame)
+            content_frame.pack(fill="x", pady=2)  # 그 다음 내용 프레임 패킹
+            self.group_contents.append(content_frame)
+
+            def toggle(e=None, var=is_expanded, frame=content_frame, label=title_label, name=comp_name):
+                if var.get():
+                    frame.pack_forget()
+                    var.set(False)
+                    label.config(text=f"▶ {name}")
+                else:
+                    frame.pack(fill="x", pady=2)
+                    var.set(True)
+                    label.config(text=f"▼ {name}")
+
+            title_label.bind("<Button-1>", toggle)
 
             widget_row = {}
 
             for key in REQUIRED_COMPONENT_KEYS:
-                row = tk.Frame(group)
+                row = tk.Frame(content_frame)
                 row.pack(fill="x", pady=2, expand=True)
 
                 def make_click_handler(i, k):
                     return lambda e: self.select_slot(i, k)
 
-                # 슬롯 키 라벨
                 key_label = tk.Label(row, text=key, width=12)
                 key_label.pack(side="left")
                 key_label.bind("<Button-1>", make_click_handler(idx, key))
 
-                # 해시 라벨
                 hash_val = comp.get(key) or ""
                 hash_label = tk.Label(row, text=hash_val, width=15, anchor="w", bg="#f0f0f0")
                 hash_label.pack(side="left", padx=5)
                 hash_label.bind("<Button-1>", make_click_handler(idx, key))
 
-                # 선택된 파일명 표시 라벨
                 val = tk.StringVar(value="")
                 file_label = tk.Label(row, textvariable=val, anchor="w", bg="#f7f7f7", relief="sunken")
                 file_label.pack(side="left", padx=5, expand=True, fill="x")
                 file_label.bind("<Button-1>", make_click_handler(idx, key))
 
-                # 선택 강조용으로 기억
                 self.slot_labels.append((idx, key, key_label, hash_label, file_label))
                 widget_row[key] = val
 
             self.component_widgets.append(widget_row)
 
     def select_slot(self, index, key):
-        # 이전 선택 해제
         if self.selected_index is not None and self.selected_key is not None:
             self.set_slot_highlight(self.selected_index, self.selected_key, False)
 
-        # 새 선택 적용
         self.selected_index = index
         self.selected_key = key
         self.set_slot_highlight(index, key, True)
@@ -80,11 +105,9 @@ class ComponentSlotPanel(tk.Frame):
         self.controller.set_selected_slot(index, key)
 
     def set_slot_highlight(self, index, key, selected):
-        # 해당 슬롯의 label 3개 찾아서 스타일 적용
         for i, k, key_lbl, hash_lbl, file_lbl in self.slot_labels:
             if i == index and k == key:
                 color = "#add8e6" if selected else "#f0f0f0"
-                border = "solid" if selected else "flat"
                 key_lbl.configure(bg=color)
                 hash_lbl.configure(bg=color)
                 file_lbl.configure(bg=color)
@@ -95,6 +118,6 @@ class ComponentSlotPanel(tk.Frame):
 
     def get_component_values(self):
         return self.component_widgets
-    
+
     def _resize_inner_frame(self, event):
         self.canvas.itemconfig(self.inner_window, width=event.width)
