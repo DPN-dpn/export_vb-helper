@@ -19,7 +19,7 @@ goto end
 
 :run-gui
 echo 감지된 Python 버전: %python-version%
-py -%python-version% main.py
+py -%python-version% ./source/main.py
 pause
 goto end
 
