@@ -11,11 +11,14 @@ class ComponentSlotPanel(tk.Frame):
         self.scrollbar = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
-        self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw")
+        self.inner_window = self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw")
+        
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
 
         self.inner_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+
+        self.canvas.bind("<Configure>", self._resize_inner_frame)
 
         self.component_widgets = []  # 각 컴포넌트의 {key: stringvar, ...}
         self.slot_labels = []        # 선택 시 강조할 label 모음
@@ -30,13 +33,13 @@ class ComponentSlotPanel(tk.Frame):
 
         for idx, comp in enumerate(components):
             group = tk.LabelFrame(self.inner_frame, text=comp.get("name", f"컴포넌트 {idx+1}"))
-            group.pack(fill="x", padx=10, pady=5)
+            group.pack(fill="x", padx=10, pady=5, expand=True)
 
             widget_row = {}
 
             for key in REQUIRED_COMPONENT_KEYS:
                 row = tk.Frame(group)
-                row.pack(fill="x", pady=2)
+                row.pack(fill="x", pady=2, expand=True)
 
                 def make_click_handler(i, k):
                     return lambda e: self.select_slot(i, k)
@@ -54,8 +57,8 @@ class ComponentSlotPanel(tk.Frame):
 
                 # 선택된 파일명 표시 라벨
                 val = tk.StringVar(value="")
-                file_label = tk.Label(row, textvariable=val, width=80, anchor="w", bg="#f7f7f7", relief="sunken")
-                file_label.pack(side="left", padx=5)
+                file_label = tk.Label(row, textvariable=val, anchor="w", bg="#f7f7f7", relief="sunken")
+                file_label.pack(side="left", padx=5, expand=True, fill="x")
                 file_label.bind("<Button-1>", make_click_handler(idx, key))
 
                 # 선택 강조용으로 기억
@@ -92,3 +95,6 @@ class ComponentSlotPanel(tk.Frame):
 
     def get_component_values(self):
         return self.component_widgets
+    
+    def _resize_inner_frame(self, event):
+        self.canvas.itemconfig(self.inner_window, width=event.width)
