@@ -48,10 +48,10 @@ class ComponentSlotPanel(tk.Frame):
                 bg="#ddd",
                 padx=5, pady=2
             )
-            title_label.pack(fill="x")  # 타이틀 라벨 먼저 패킹
+            title_label.pack(fill="x")
 
             content_frame = tk.Frame(outer_frame)
-            content_frame.pack(fill="x", pady=2)  # 그 다음 내용 프레임 패킹
+            content_frame.pack(fill="x", pady=2)
             self.group_contents.append(content_frame)
 
             def toggle(e=None, var=is_expanded, frame=content_frame, label=title_label, name=comp_name):
@@ -66,37 +66,38 @@ class ComponentSlotPanel(tk.Frame):
 
             title_label.bind("<Button-1>", toggle)
 
+            # 이벤트 핸들러는 내부 루프 전에 정의
+            def make_click_handler(i, k):
+                return lambda e: self.select_slot(i, k)
+
+            def make_clear_handler(i, k):
+                return lambda: self.set_slot_value(i, k, "")
+
             widget_row = {}
 
             for key in REQUIRED_COMPONENT_KEYS:
                 row = tk.Frame(content_frame)
                 row.pack(fill="x", pady=2, expand=True)
 
-                def make_click_handler(i, k):
-                    return lambda e: self.select_slot(i, k)
-
-                key_label = tk.Label(row, text=key, width=12)
-                key_label.pack(side="left")
+                key_label = tk.Label(row, text=key, width=12, anchor="w")
+                key_label.grid(row=0, column=0, padx=2, sticky="w")
                 key_label.bind("<Button-1>", make_click_handler(idx, key))
 
                 hash_val = comp.get(key) or ""
                 hash_label = tk.Label(row, text=hash_val, width=15, anchor="w", bg="#f0f0f0")
-                hash_label.pack(side="left", padx=5)
+                hash_label.grid(row=0, column=1, padx=2, sticky="w")
                 hash_label.bind("<Button-1>", make_click_handler(idx, key))
 
                 val = tk.StringVar(value="")
                 file_label = tk.Label(row, textvariable=val, anchor="w", bg="#f7f7f7", relief="sunken")
-                file_label.pack(side="left", padx=5, expand=True, fill="x")
+                file_label.grid(row=0, column=2, padx=2, sticky="we")
                 file_label.bind("<Button-1>", make_click_handler(idx, key))
-                
-                def make_clear_handler(i, k):
-                    return lambda: self.set_slot_value(i, k, "")
 
-                clear_btn = tk.Button(row, text="X", command=make_clear_handler(idx, key), width=2, fg="red")
-                clear_btn.pack(side="left", padx=2)
-                clear_btn.configure(width=3)
-                clear_btn.update_idletasks()
-                clear_btn.minsize = (24, 1)
+                clear_btn = tk.Button(row, text="X", command=make_clear_handler(idx, key), fg="red", width=2)
+                clear_btn.grid(row=0, column=3, padx=2, sticky="e")
+
+                row.columnconfigure(2, weight=1)  # file_label은 늘어나게
+                row.columnconfigure(3, weight=0)  # 버튼은 고정
 
                 self.slot_labels.append((idx, key, key_label, hash_label, file_label))
                 widget_row[key] = val
