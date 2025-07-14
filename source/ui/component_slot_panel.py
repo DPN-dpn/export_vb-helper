@@ -88,6 +88,15 @@ class ComponentSlotPanel(tk.Frame):
                 file_label = tk.Label(row, textvariable=val, anchor="w", bg="#f7f7f7", relief="sunken")
                 file_label.pack(side="left", padx=5, expand=True, fill="x")
                 file_label.bind("<Button-1>", make_click_handler(idx, key))
+                
+                def make_clear_handler(i, k):
+                    return lambda: self.set_slot_value(i, k, "")
+
+                clear_btn = tk.Button(row, text="X", command=make_clear_handler(idx, key), width=2, fg="red")
+                clear_btn.pack(side="left", padx=2)
+                clear_btn.configure(width=3)
+                clear_btn.update_idletasks()
+                clear_btn.minsize = (24, 1)
 
                 self.slot_labels.append((idx, key, key_label, hash_label, file_label))
                 widget_row[key] = val
