@@ -12,23 +12,31 @@ class UIComponents:
         self.selected_file = None
 
         self.path_selector = PathSelectorFrame(root, self)
-        self.path_selector.pack(pady=5)
+        self.path_selector.pack(pady=5, fill="x")
 
-        self.main_frame = tk.Frame(root)
-        self.main_frame.pack(fill="both", expand=True)
+        # 수직 분할 창 (main + logger)
+        self.vertical_pane = tk.PanedWindow(root, orient="vertical")
+        self.vertical_pane.pack(fill="both", expand=True)
+
+        # 메인 작업 프레임 (좌우 슬롯/파일)
+        self.main_frame = tk.Frame(self.vertical_pane)
+        self.main_frame.pack(fill="both", expand=True)  # 중요: 내부에서도 확장 설정
+        self.vertical_pane.add(self.main_frame, stretch="always")
 
         self.slot_panel = ComponentSlotPanel(self.main_frame, self)
         self.slot_panel.pack(side="left", fill="both", expand=True)
 
         self.control_frame = tk.Frame(self.main_frame)
-        self.control_frame.pack(side="left", padx=5)
+        self.control_frame.pack(side="left", padx=5, pady=5)
         tk.Button(self.control_frame, text="<", command=self.assign_selected_file).pack()
 
         self.file_panel = ModFileListPanel(self.main_frame, self)
         self.file_panel.pack(side="left", fill="y", padx=10)
 
-        self.logger = LoggerFrame(root)
-        self.logger.pack(fill="both")
+        # 로그 프레임
+        self.logger = LoggerFrame(self.vertical_pane)
+        self.logger.pack(fill="both", expand=True)  # 내부에서 확장 설정 필수
+        self.vertical_pane.add(self.logger, minsize=30, stretch="always")
 
     def set_selected_slot(self, index, key):
         self.selected_slot = (index, key)
