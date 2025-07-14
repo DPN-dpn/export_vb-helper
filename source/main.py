@@ -4,23 +4,15 @@ from ui_components import UIComponents
 from logger import Logger
 
 if __name__ == "__main__":
-    print("[main.py] 프로그램 시작")
-    try:
-        root = tk.Tk()
-        root.title("Mod Asset Matcher")
-        root.geometry("800x600")
+    root = tk.Tk()
+    root.geometry("1000x700")
+    root.title("엵툵 컴포넌트 매칭기")
 
-        logger = Logger(root)
-        ui = UIComponents(root)  # matcher 없이 생성
-        app = ComponentMatcherApp(root, ui, logger)
-        ui.set_matcher(app)  # 여기서 연결 + UI 빌드
+    logger = Logger(root)
+    ui = UIComponents(root)
+    app = ComponentMatcherApp(root, ui, logger)
+    ui.matcher = app
+    ui.build_ui()
+    logger.attach(root)
 
-        print("[main.py] mainloop 진입")
-        root.mainloop()
-        print("[main.py] mainloop 정상 종료")
-
-    except Exception as e:
-        import traceback
-        print("[main.py] 예외 발생:", e)
-        traceback.print_exc()
-        input("엔터를 눌러 종료...")
+    root.mainloop()
