@@ -1,6 +1,4 @@
 import tkinter as tk
-import ini_generator
-from pathlib import Path
 from .path_selector import PathSelectorFrame
 from .component_slot_panel import ComponentSlotPanel
 from .mod_file_panel import ModFileListPanel
@@ -34,7 +32,7 @@ class UIComponents:
         self.file_panel.pack(side="left", fill="y", padx=10)
 
         self.export_frame = tk.Frame(self.vertical_pane)
-        self.export_button = tk.Button(self.export_frame, text="INI 내보내기", command=self.export_ini)
+        self.export_button = tk.Button(self.export_frame, text="내보내기", command=self.export)
         self.export_button.pack(pady=5, padx=10, fill="x")
         self.vertical_pane.add(self.export_frame, stretch="never")
 
@@ -62,10 +60,6 @@ class UIComponents:
         self.slot_panel.display_components(components, mod_files)
         self.file_panel.set_file_list(mod_files)
 
-        # ✅ 파일명만 드롭다운에 표시
-        ini_files = [Path(f).name for f in mod_files if f.lower().endswith(".ini")]
-        self.slot_panel.set_ini_file_list(ini_files)
-
     def log(self, msg):
         self.logger.log(msg)
 
@@ -82,30 +76,6 @@ class UIComponents:
         if self.matcher:
             self.matcher.select_mod_folder_from_path(folder)
 
-    def export_ini(self):
-        if not hasattr(self.slot_panel, "components") or not self.slot_panel.components:
-            self.log("[경고] 컴포넌트 정보가 없습니다.")
-            return
-
-        ini_filename = self.slot_panel.get_selected_ini_path()
-        if not ini_filename or not ini_filename.endswith(".ini"):
-            self.log("[경고] 내보낼 ini 템플릿을 선택하세요.")
-            return
-
-        # 실제 전체 경로 다시 찾기 (mod_file_panel에서 사용 중인 전체 경로 활용 가능하면 수정 필요)
-        try:
-            # 예시: 파일명만 넘겼을 때 폴더 기준으로 경로 재구성
-            mod_folder = self.path_selector.mod_folder_path.get()
-            ini_path = str(Path(mod_folder) / ini_filename)
-        except Exception as e:
-            self.log(f"[오류] ini 경로 구성 실패: {e}")
-            return
-
-        try:
-            ini_generator.generate_ini(
-                self.slot_panel.components,
-                template_path=ini_path,
-            )
-            self.log(f"[완료] '{ini_path}'을 템플릿으로 ini가 생성되었습니다.")
-        except Exception as e:
-            self.log(f"[오류] ini 생성 중 오류 발생: {e}")
+    def export(self):
+        # TODO
+        pass

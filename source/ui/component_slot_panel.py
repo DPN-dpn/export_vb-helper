@@ -24,23 +24,14 @@ class ComponentSlotPanel(tk.Frame):
         self.selected_variant = None
         self.component_widgets = []
 
-        self.ini_frame = tk.Frame(self.inner_frame)
-        self.ini_frame.pack(fill="x", pady=(5, 10))
-        tk.Label(self.ini_frame, text="Target ini:").pack(side="left")
-        self.selected_ini = tk.StringVar()
-        self.ini_dropdown = tk.OptionMenu(self.ini_frame, self.selected_ini, "")
-        self.ini_dropdown.pack(side="left", fill="x", expand=True)
-
     def _resize_inner_frame(self, event):
         self.canvas.itemconfig(self.inner_window, width=event.width)
 
     def display_components(self, components, mod_files):
         self.components = components
 
-        # 드롭다운 외 슬롯들만 삭제
         for widget in self.inner_frame.winfo_children():
-            if widget != self.ini_frame:
-                widget.destroy()
+            widget.destroy()
 
         self.component_widgets.clear()
         self.slot_labels.clear()
@@ -187,14 +178,3 @@ class ComponentSlotPanel(tk.Frame):
 
     def get_component_values(self):
         return self.component_widgets
-
-    def set_ini_file_list(self, ini_list):
-        menu = self.ini_dropdown["menu"]
-        menu.delete(0, "end")
-        for ini in ini_list:
-            menu.add_command(label=ini, command=lambda value=ini: self.selected_ini.set(value))
-        if ini_list:
-            self.selected_ini.set(ini_list[0])
-
-    def get_selected_ini_path(self):
-        return self.selected_ini.get()
