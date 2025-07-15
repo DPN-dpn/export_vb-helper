@@ -43,7 +43,6 @@ class ComponentMatcherApp:
             for entry in data:
                 name = entry.get("component_name", "Unnamed")
                 classifications = entry.get("object_classifications", [])
-                texture_sets = entry.get("texture_hashes", [])
 
                 if not classifications:
                     classifications = [""]
@@ -60,14 +59,6 @@ class ComponentMatcherApp:
                     variant = {
                         "ib": entry.get("ib")
                     }
-
-                    textures = texture_sets[i] if i < len(texture_sets) else []
-                    for tex_type, _, tex_hash in textures:
-                        key = tex_type.lower()
-                        if key == "highlightmap":
-                            variant["materialmap"] = tex_hash
-                        else:
-                            variant[key] = tex_hash
 
                     variants[label] = variant
 
