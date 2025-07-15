@@ -14,13 +14,11 @@ class UIComponents:
         self.path_selector = PathSelectorFrame(root, self)
         self.path_selector.pack(pady=5, fill="x")
 
-        # 수직 분할 창 (main + logger)
         self.vertical_pane = tk.PanedWindow(root, orient="vertical")
         self.vertical_pane.pack(fill="both", expand=True)
 
-        # 메인 작업 프레임 (좌우 슬롯/파일)
         self.main_frame = tk.Frame(self.vertical_pane)
-        self.main_frame.pack(fill="both", expand=True)  # 중요: 내부에서도 확장 설정
+        self.main_frame.pack(fill="both", expand=True)
         self.vertical_pane.add(self.main_frame, stretch="always")
 
         self.slot_panel = ComponentSlotPanel(self.main_frame, self)
@@ -33,9 +31,8 @@ class UIComponents:
         self.file_panel = ModFileListPanel(self.main_frame, self)
         self.file_panel.pack(side="left", fill="y", padx=10)
 
-        # 로그 프레임
         self.logger = LoggerFrame(self.vertical_pane)
-        self.logger.pack(fill="both", expand=True)  # 내부에서 확장 설정 필수
+        self.logger.pack(fill="both", expand=True)
         self.vertical_pane.add(self.logger, minsize=30, stretch="always")
 
     def set_selected_slot(self, index, key):
@@ -54,12 +51,9 @@ class UIComponents:
         except Exception as e:
             self.log(f"[오류] 슬롯에 파일 할당 중 오류 발생: {e}")
 
-    def display_components(self, components, mod_files_by_type):
-        self.slot_panel.display_components(components, mod_files_by_type)
-        all_files = []
-        for files in mod_files_by_type.values():
-            all_files.extend(files)
-        self.file_panel.set_file_list(all_files)
+    def display_components(self, components, mod_files):  # 수정된 부분 ✅
+        self.slot_panel.display_components(components, mod_files)
+        self.file_panel.set_file_list(mod_files)
 
     def log(self, msg):
         self.logger.log(msg)

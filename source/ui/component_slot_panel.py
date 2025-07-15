@@ -1,5 +1,4 @@
 import tkinter as tk
-from common import REQUIRED_COMPONENT_KEYS
 
 class ComponentSlotPanel(tk.Frame):
     def __init__(self, master, controller):
@@ -25,7 +24,7 @@ class ComponentSlotPanel(tk.Frame):
         self.selected_key = None
         self.group_contents = []
 
-    def display_components(self, components, mod_files_by_type):
+    def display_components(self, components, mod_files):
         for widget in self.inner_frame.winfo_children():
             widget.destroy()
         self.component_widgets.clear()
@@ -74,7 +73,7 @@ class ComponentSlotPanel(tk.Frame):
 
             widget_row = {}
 
-            for key in REQUIRED_COMPONENT_KEYS:
+            for key in comp.get("slots", []):
                 row = tk.Frame(content_frame)
                 row.pack(fill="x", pady=2, expand=True)
 

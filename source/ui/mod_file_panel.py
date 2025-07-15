@@ -1,4 +1,5 @@
 import tkinter as tk
+import os
 
 class ModFileListPanel(tk.Frame):
     def __init__(self, master, controller):
@@ -13,7 +14,7 @@ class ModFileListPanel(tk.Frame):
     def set_file_list(self, file_list):
         self.listbox.delete(0, tk.END)
         for fname in sorted(set(file_list)):
-            self.listbox.insert(tk.END, fname)
+            self.listbox.insert(tk.END, os.path.basename(fname))
 
     def on_file_selected(self, event):
         sel = self.listbox.curselection()

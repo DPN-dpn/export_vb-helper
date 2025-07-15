@@ -1,7 +1,6 @@
 import os
 import json
 from file_scanner import scan_folder
-from common import REQUIRED_COMPONENT_KEYS
 
 class ComponentMatcherApp:
     def __init__(self, root, ui):
@@ -26,8 +25,7 @@ class ComponentMatcherApp:
         self.ui.log(f"불러온 파일: {len(self.mod_files)}개")
         self.ui.log("")
 
-        by_type = self._categorize_files_by_type(self.mod_files)
-        self.ui.display_components(self.components, by_type)
+        self.ui.display_components(self.components, self.mod_files)
 
     def load_components_from_hash_json(self, folder):
         try:
@@ -45,41 +43,35 @@ class ComponentMatcherApp:
 
             components = []
             for entry in data:
-                comp = {k: None for k in REQUIRED_COMPONENT_KEYS}
-                comp["ib"] = entry.get("ib")
-                comp["position"] = entry.get("position_vb")
-                comp["texcoord"] = entry.get("texcoord_vb")
-                comp["blend"] = entry.get("blend_vb")
+                classifications = entry.get("object_classifications", [])
+                texture_sets = entry.get("texture_hashes", [])
 
-                textures = entry.get("texture_hashes", [])
-                if textures:
-                    for tex_type, _, tex_hash in textures[0]:
+                # classification이 없으면 1개만 처리
+                if not classifications:
+                    classifications = [""]
+                    texture_sets = [texture_sets[0] if texture_sets else []]
+
+                for i, label in enumerate(classifications):
+                    comp = {
+                        "ib": entry.get("ib"),
+                        "position": entry.get("position_vb"),
+                        "texcoord": entry.get("texcoord_vb"),
+                        "blend": entry.get("blend_vb"),
+                    }
+                    comp["name"] = f"{entry.get('component_name', 'Unnamed')}{label}"
+
+                    textures = texture_sets[i] if i < len(texture_sets) else []
+                    for tex_type, _, tex_hash in textures:
                         key = tex_type.lower()
-                        if key in comp:
-                            comp[key] = tex_hash
-                        elif key == "highlightmap":
+                        if key == "highlightmap":
                             comp["materialmap"] = tex_hash
+                        else:
+                            comp[key] = tex_hash
 
-                comp["name"] = entry.get("component_name", "Unnamed")
-                components.append(comp)
+                    comp["slots"] = [k for k, v in comp.items() if k not in ("name", "slots") and v]
+                    components.append(comp)
 
             self.components = components
-            self.ui.display_components(self.components, {})
+            self.ui.display_components(self.components, self.mod_files)
         except Exception as e:
             self.ui.log(f"[오류] 컴포넌트 로딩 실패: {e}")
-
-    def _categorize_files_by_type(self, files):
-        by_type = {k: [] for k in REQUIRED_COMPONENT_KEYS}
-        for f in files:
-            fname = os.path.basename(f).lower()
-            if fname.endswith(".buf"):
-                for key in ["ib", "position", "texcoord", "blend"]:
-                    if key in fname:
-                        by_type[key].append(fname)
-                        break
-            elif fname.endswith(".dds"):
-                for key in ["diffuse", "lightmap", "normalmap", "materialmap"]:
-                    if key in fname:
-                        by_type[key].append(fname)
-                        break
-        return by_type
