@@ -3,6 +3,7 @@ from .path_selector import PathSelectorFrame
 from .component_slot_panel import ComponentSlotPanel
 from .mod_file_panel import ModFileListPanel
 from .logger_frame import LoggerFrame
+import ini_generator  # INI 생성기 추가
 
 class UIComponents:
     def __init__(self, root):
@@ -31,6 +32,11 @@ class UIComponents:
         self.file_panel = ModFileListPanel(self.main_frame, self)
         self.file_panel.pack(side="left", fill="y", padx=10)
 
+        self.export_frame = tk.Frame(self.vertical_pane)
+        self.export_button = tk.Button(self.export_frame, text="INI 내보내기", command=self.export_ini)
+        self.export_button.pack(pady=5, padx=10, fill="x")
+        self.vertical_pane.add(self.export_frame, stretch="never")
+
         self.logger = LoggerFrame(self.vertical_pane)
         self.logger.pack(fill="both", expand=True)
         self.vertical_pane.add(self.logger, minsize=30, stretch="always")
@@ -51,7 +57,7 @@ class UIComponents:
         except Exception as e:
             self.log(f"[오류] 슬롯에 파일 할당 중 오류 발생: {e}")
 
-    def display_components(self, components, mod_files):  # 수정된 부분 ✅
+    def display_components(self, components, mod_files):
         self.slot_panel.display_components(components, mod_files)
         self.file_panel.set_file_list(mod_files)
 
@@ -70,3 +76,11 @@ class UIComponents:
     def on_mod_folder_selected(self, folder):
         if self.matcher:
             self.matcher.select_mod_folder_from_path(folder)
+
+    # ✅ INI 생성 함수
+    def export_ini(self):
+        if not self.slot_panel.components:
+            self.log("[경고] 컴포넌트 정보가 없습니다.")
+            return
+        ini_generator.generate_ini(self.slot_panel.components)
+        self.log("[완료] generated.ini 파일이 생성되었습니다.")

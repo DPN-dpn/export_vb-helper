@@ -25,6 +25,7 @@ class ComponentSlotPanel(tk.Frame):
         self.component_widgets = []
 
     def display_components(self, components, mod_files):
+        self.components = components
         for widget in self.inner_frame.winfo_children():
             widget.destroy()
         self.component_widgets.clear()
