@@ -35,8 +35,8 @@ class UIComponents:
         self.logger.pack(fill="both", expand=True)
         self.vertical_pane.add(self.logger, minsize=30, stretch="always")
 
-    def set_selected_slot(self, index, key):
-        self.selected_slot = (index, key)
+    def set_selected_slot(self, index, key, variant=None):
+        self.selected_slot = (index, key, variant)
 
     def set_selected_file(self, fname):
         self.selected_file = fname
@@ -46,8 +46,8 @@ class UIComponents:
             self.log("[경고] 슬롯 또는 파일이 선택되지 않았습니다.")
             return
         try:
-            index, key = self.selected_slot
-            self.slot_panel.set_slot_value(index, key, self.selected_file)
+            index, key, variant = self.selected_slot
+            self.slot_panel.set_slot_value(index, key, self.selected_file, variant)
         except Exception as e:
             self.log(f"[오류] 슬롯에 파일 할당 중 오류 발생: {e}")
 

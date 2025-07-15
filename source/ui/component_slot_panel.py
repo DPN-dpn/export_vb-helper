@@ -11,36 +11,34 @@ class ComponentSlotPanel(tk.Frame):
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
         self.inner_window = self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw")
-        
+
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
 
         self.inner_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", self._resize_inner_frame)
 
-        self.component_widgets = []
         self.slot_labels = []
         self.selected_index = None
         self.selected_key = None
-        self.group_contents = []
+        self.selected_variant = None
+        self.component_widgets = []
 
     def display_components(self, components, mod_files):
         for widget in self.inner_frame.winfo_children():
             widget.destroy()
         self.component_widgets.clear()
         self.slot_labels.clear()
-        self.group_contents.clear()
 
-        for idx, comp in enumerate(components):
-            outer_frame = tk.Frame(self.inner_frame)
-            outer_frame.pack(fill="x", padx=10, pady=5, expand=True)
+        for comp_index, comp in enumerate(components):
+            group_frame = tk.Frame(self.inner_frame)
+            group_frame.pack(fill="x", padx=10, pady=5, expand=True)
 
-            is_expanded = tk.BooleanVar(value=True)
-            comp_name = comp.get("name", f"컴포넌트 {idx+1}")
+            is_group_expanded = tk.BooleanVar(value=True)
 
             title_label = tk.Label(
-                outer_frame,
-                text=f"▼ {comp_name}",
+                group_frame,
+                text=f"▼ {comp['name']}",
                 font=("Arial", 10, "bold"),
                 anchor="w",
                 cursor="hand2",
@@ -49,87 +47,128 @@ class ComponentSlotPanel(tk.Frame):
             )
             title_label.pack(fill="x")
 
-            content_frame = tk.Frame(outer_frame)
-            content_frame.pack(fill="x", pady=2)
-            self.group_contents.append(content_frame)
+            body_frame = tk.Frame(group_frame)
+            body_frame.pack(fill="x", padx=5, pady=2)
 
-            def toggle(e=None, var=is_expanded, frame=content_frame, label=title_label, name=comp_name):
+            def toggle_group(e=None, var=is_group_expanded, frame=body_frame, label=title_label, name=comp["name"]):
                 if var.get():
                     frame.pack_forget()
                     var.set(False)
                     label.config(text=f"▶ {name}")
                 else:
-                    frame.pack(fill="x", pady=2)
+                    frame.pack(fill="x", padx=5, pady=2)
                     var.set(True)
                     label.config(text=f"▼ {name}")
 
-            title_label.bind("<Button-1>", toggle)
+            title_label.bind("<Button-1>", toggle_group)
 
-            def make_click_handler(i, k):
-                return lambda e: self.select_slot(i, k)
+            shared_widgets = {}
+            for key in comp.get("shared", {}):
+                shared_widgets[key] = self._create_slot_row(body_frame, comp_index, key, comp["shared"][key], is_variant=False)
 
-            def make_clear_handler(i, k):
-                return lambda: self.set_slot_value(i, k, "")
+            variant_widgets = {}
+            for label, variant_data in comp.get("variants", {}).items():
+                sub_frame = tk.Frame(body_frame)
+                sub_frame.pack(fill="x", padx=(5, 0), pady=4)
 
-            widget_row = {}
+                is_variant_expanded = tk.BooleanVar(value=True)
 
-            for key in comp.get("slots", []):
-                row = tk.Frame(content_frame)
-                row.pack(fill="x", pady=2, expand=True)
+                var_label = tk.Label(
+                    sub_frame,
+                    text=f"▼ {label}",
+                    font=("Arial", 9, "bold"),
+                    anchor="w",
+                    cursor="hand2",
+                    bg="#eee",
+                    padx=5, pady=1
+                )
+                var_label.pack(fill="x")
 
-                key_label = tk.Label(row, text=key, width=12, anchor="w")
-                key_label.grid(row=0, column=0, padx=2, sticky="w")
-                key_label.bind("<Button-1>", make_click_handler(idx, key))
+                content = tk.Frame(sub_frame)
+                content.pack(fill="x", padx=(5, 0), pady=2)
 
-                hash_val = comp.get(key) or ""
-                hash_label = tk.Label(row, text=hash_val, width=15, anchor="w", bg="#f0f0f0")
-                hash_label.grid(row=0, column=1, padx=2, sticky="w")
-                hash_label.bind("<Button-1>", make_click_handler(idx, key))
+                def toggle_variant(e=None, var=is_variant_expanded, frame=content, label=var_label, name=label):
+                    if var.get():
+                        frame.pack_forget()
+                        var.set(False)
+                        label.config(text=f"▶ {name}")
+                    else:
+                        frame.pack(fill="x", padx=5, pady=2)
+                        var.set(True)
+                        label.config(text=f"▼ {name}")
 
-                val = tk.StringVar(value="")
-                file_label = tk.Label(row, textvariable=val, anchor="w", bg="#f7f7f7", relief="sunken")
-                file_label.grid(row=0, column=2, padx=2, sticky="we")
-                file_label.bind("<Button-1>", make_click_handler(idx, key))
+                var_label.bind("<Button-1>", toggle_variant)
 
-                clear_btn = tk.Button(row, text="X", command=make_clear_handler(idx, key), fg="red", width=2)
-                clear_btn.grid(row=0, column=3, padx=2, sticky="e")
+                sub_widgets = {}
+                for key in variant_data:
+                    sub_widgets[key] = self._create_slot_row(content, comp_index, key, variant_data[key], is_variant=True, variant=label)
+                variant_widgets[label] = sub_widgets
 
-                row.columnconfigure(2, weight=1)
-                row.columnconfigure(3, weight=0)
+            self.component_widgets.append({
+                "shared": shared_widgets,
+                "variants": variant_widgets
+            })
 
-                self.slot_labels.append((idx, key, key_label, hash_label, file_label))
-                widget_row[key] = val
+    def _create_slot_row(self, parent, comp_index, key, hash_value, is_variant=False, variant=None):
+        row = tk.Frame(parent)
+        row.pack(fill="x", pady=2, expand=True)
 
-            self.component_widgets.append(widget_row)
+        key_label = tk.Label(row, text=key, width=12, anchor="w")
+        key_label.grid(row=0, column=0, padx=2, sticky="w")
+        key_label.bind("<Button-1>", lambda e: self.select_slot(comp_index, key, variant))
 
-    def select_slot(self, index, key):
+        hash_label = tk.Label(row, text=hash_value or "", width=15, anchor="w", bg="#f0f0f0")
+        hash_label.grid(row=0, column=1, padx=2, sticky="w")
+        hash_label.bind("<Button-1>", lambda e: self.select_slot(comp_index, key, variant))
+
+        val = tk.StringVar(value="")
+        file_label = tk.Label(row, textvariable=val, anchor="w", bg="#f7f7f7", relief="sunken")
+        file_label.grid(row=0, column=2, padx=2, sticky="we")
+        file_label.bind("<Button-1>", lambda e: self.select_slot(comp_index, key, variant))
+
+        clear_btn = tk.Button(row, text="X", command=lambda: self.set_slot_value(comp_index, key, "", variant), fg="red", width=2)
+        clear_btn.grid(row=0, column=3, padx=2, sticky="e")
+
+        row.columnconfigure(2, weight=1)
+        row.columnconfigure(3, weight=0)
+
+        self.slot_labels.append((comp_index, key, variant, key_label, hash_label, file_label))
+        return val
+
+    def select_slot(self, comp_index, key, variant=None):
         if self.selected_index is not None and self.selected_key is not None:
-            self.set_slot_highlight(self.selected_index, self.selected_key, False)
+            self.set_slot_highlight(self.selected_index, self.selected_key, False, self.selected_variant)
 
-        self.selected_index = index
+        self.selected_index = comp_index
         self.selected_key = key
-        self.set_slot_highlight(index, key, True)
+        self.selected_variant = variant
+        self.set_slot_highlight(comp_index, key, True, variant)
 
-        self.controller.set_selected_slot(index, key)
-        comp_name = self.controller.matcher.components[index].get("name", f"컴포넌트 {index+1}")
-        self.controller.log(f"[선택] {comp_name} - {key} 슬롯 선택됨")
+        self.controller.set_selected_slot(comp_index, key, variant)
 
-    def set_slot_highlight(self, index, key, selected):
-        for i, k, key_lbl, hash_lbl, file_lbl in self.slot_labels:
-            if i == index and k == key:
+    def set_slot_highlight(self, index, key, selected, variant=None):
+        for i, k, v, key_lbl, hash_lbl, file_lbl in self.slot_labels:
+            if i == index and k == key and v == variant:
                 color = "#add8e6" if selected else "#f0f0f0"
                 key_lbl.configure(bg=color)
                 hash_lbl.configure(bg=color)
                 file_lbl.configure(bg=color)
                 break
 
-    def set_slot_value(self, index, key, value):
-        self.component_widgets[index][key].set(value)
-        comp_name = self.controller.matcher.components[index].get("name", f"컴포넌트 {index+1}")
-        if value:
-            self.controller.log(f"[할당] {comp_name} - {key} ← {value}")
+    def set_slot_value(self, index, key, value, variant=None):
+        widget = None
+        if variant:
+            widget = self.component_widgets[index]["variants"][variant][key]
         else:
-            self.controller.log(f"[비움] {comp_name} - {key} 슬롯이 비워졌습니다.")
+            widget = self.component_widgets[index]["shared"][key]
+
+        widget.set(value)
+        label = variant if variant else "공통"
+        comp_name = self.controller.matcher.components[index]["name"]
+        if value:
+            self.controller.log(f"[할당] {comp_name} ({label}) - {key} ← {value}")
+        else:
+            self.controller.log(f"[비움] {comp_name} ({label}) - {key} 슬롯이 비워졌습니다.")
 
     def get_component_values(self):
         return self.component_widgets

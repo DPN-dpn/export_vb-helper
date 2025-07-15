@@ -43,33 +43,41 @@ class ComponentMatcherApp:
 
             components = []
             for entry in data:
+                name = entry.get("component_name", "Unnamed")
                 classifications = entry.get("object_classifications", [])
                 texture_sets = entry.get("texture_hashes", [])
 
-                # classification이 없으면 1개만 처리
                 if not classifications:
                     classifications = [""]
                     texture_sets = [texture_sets[0] if texture_sets else []]
 
+                shared = {
+                    "position": entry.get("position_vb"),
+                    "texcoord": entry.get("texcoord_vb"),
+                    "blend": entry.get("blend_vb"),
+                }
+
+                variants = {}
                 for i, label in enumerate(classifications):
-                    comp = {
-                        "ib": entry.get("ib"),
-                        "position": entry.get("position_vb"),
-                        "texcoord": entry.get("texcoord_vb"),
-                        "blend": entry.get("blend_vb"),
+                    variant = {
+                        "ib": entry.get("ib")
                     }
-                    comp["name"] = f"{entry.get('component_name', 'Unnamed')}{label}"
 
                     textures = texture_sets[i] if i < len(texture_sets) else []
                     for tex_type, _, tex_hash in textures:
                         key = tex_type.lower()
                         if key == "highlightmap":
-                            comp["materialmap"] = tex_hash
+                            variant["materialmap"] = tex_hash
                         else:
-                            comp[key] = tex_hash
+                            variant[key] = tex_hash
 
-                    comp["slots"] = [k for k, v in comp.items() if k not in ("name", "slots") and v]
-                    components.append(comp)
+                    variants[label] = variant
+
+                components.append({
+                    "name": name,
+                    "shared": shared,
+                    "variants": variants
+                })
 
             self.components = components
             self.ui.display_components(self.components, self.mod_files)
