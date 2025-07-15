@@ -15,7 +15,6 @@ class ComponentMatcherApp:
         self.ui.path_selector.asset_path_var.set(folder)
         self.ui.log(f"[에셋 폴더 선택] {folder}")
         self.ui.log(f"불러온 파일: {len(self.asset_files)}개")
-        self.ui.log("")
         self.load_components_from_hash_json(folder)
 
     def select_mod_folder_from_path(self, folder):
@@ -23,7 +22,6 @@ class ComponentMatcherApp:
         self.ui.path_selector.mod_path_var.set(folder)
         self.ui.log(f"[모드 폴더 선택] {folder}")
         self.ui.log(f"불러온 파일: {len(self.mod_files)}개")
-        self.ui.log("")
 
         self.ui.display_components(self.components, self.mod_files)
 
