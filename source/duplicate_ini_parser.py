@@ -3,7 +3,8 @@ import collections
 def parse_ini_with_duplicates(path):
     ini_data = collections.OrderedDict()
     current_section = None
-    in_conditional = False  # if 구문 안인지 여부
+    temp_section = None
+    temp_pairs = collections.OrderedDict()
 
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -12,33 +13,38 @@ def parse_ini_with_duplicates(path):
                 continue
 
             if stripped.startswith("[") and stripped.endswith("]"):
-                section_name = stripped[1:-1].strip()
-                current_section = section_name
-                ini_data[current_section] = collections.OrderedDict()
-                in_conditional = False
+                # 섹션 시작 전, 이전 섹션을 저장할지 결정
+                if temp_section and not (
+                    temp_section.startswith("Resource") and temp_pairs.get("type") == "StructuredBuffer"
+                ):
+                    ini_data[temp_section] = temp_pairs
+
+                # 새 섹션 초기화
+                temp_section = stripped[1:-1].strip()
+                temp_pairs = collections.OrderedDict()
                 continue
 
-            if stripped.startswith("if ") and "==" in stripped:
-                in_conditional = True
+            if stripped.startswith(("if ", "elif", "else if", "else", "endif")):
                 continue
 
-            if stripped == "endif":
-                in_conditional = False
-                continue
-
-            if "=" in stripped and current_section:
+            if "=" in stripped and temp_section:
                 key, value = map(str.strip, stripped.split("=", 1))
-                if key in ini_data[current_section]:
-                    existing = ini_data[current_section][key]
+                if key in temp_pairs:
+                    existing = temp_pairs[key]
                     if isinstance(existing, list):
                         existing.append(value)
                     else:
-                        ini_data[current_section][key] = [existing, value]
+                        temp_pairs[key] = [existing, value]
                 else:
-                    ini_data[current_section][key] = value
+                    temp_pairs[key] = value
+
+    # 마지막 섹션 처리
+    if temp_section and not (
+        temp_section.startswith("Resource") and temp_pairs.get("type") == "StructuredBuffer"
+    ):
+        ini_data[temp_section] = temp_pairs
 
     return ini_data
-
 
 def save_ini_with_duplicates(path, ini_data):
     with open(path, "w", encoding="utf-8") as f:
