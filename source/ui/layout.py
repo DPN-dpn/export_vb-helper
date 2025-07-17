@@ -3,6 +3,7 @@ from .path_selector import PathSelectorFrame
 from .component_slot_panel import ComponentSlotPanel
 from .mod_file_panel import ModFileListPanel
 from .logger_frame import LoggerFrame
+import ini_generator
 
 class UIComponents:
     def __init__(self, root):
@@ -77,5 +78,10 @@ class UIComponents:
             self.matcher.select_mod_folder_from_path(folder)
 
     def export(self):
-        # TODO
-        pass
+        try:
+            asset_path = self.path_selector.asset_path_var.get()
+            mod_path = self.path_selector.mod_path_var.get()
+            ini_generator.generate_ini(asset_path, mod_path, self.slot_panel)
+            self.log("✅ generated.ini 생성 및 내보내기 완료")
+        except Exception as e:
+            self.log(f"❌ ini 내보내기 실패: {e}")

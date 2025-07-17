@@ -111,6 +111,7 @@ class ComponentSlotPanel(tk.Frame):
                 variant_widgets[label] = sub_widgets
 
             self.component_widgets.append({
+                "name": comp['name'],
                 "shared": shared_widgets,
                 "variants": variant_widgets
             })
