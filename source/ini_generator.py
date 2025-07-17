@@ -27,6 +27,11 @@ def collect_component_file_paths(component_entries):
 
     return result
 
+def find_file_recursively(base_dir, filename):
+    for root, _, files in os.walk(base_dir):
+        if filename in files:
+            return os.path.join(root, filename)
+    return None
 
 def rename_sections_and_files(ini_path, asset_name, filename_to_info, mod_folder_path):
     def format_kind_name(kind):
@@ -59,10 +64,14 @@ def rename_sections_and_files(ini_path, asset_name, filename_to_info, mod_folder
                 else f"{asset_name}{comp_name}{kind_str}{ext}"
             )
 
-            old_file_path = os.path.join(mod_folder_path, base)
-            new_file_path = os.path.join(mod_folder_path, new_filename)
-            if os.path.exists(old_file_path):
-                move(old_file_path, new_file_path)
+            old_file_path = find_file_recursively(mod_folder_path, base)
+            if old_file_path is None:
+                continue
+
+            rel_path = os.path.relpath(old_file_path, mod_folder_path)
+            new_file_path = os.path.join(mod_folder_path, os.path.dirname(rel_path), new_filename)
+            os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+            move(old_file_path, new_file_path)
 
             new_section_data = collections.OrderedDict(config[target_section])
             new_section_data["filename"] = new_filename
@@ -94,7 +103,6 @@ def export_modified_mod(mod_folder_path, output_root_path):
 
 def generate_ini(asset_folder_path, mod_folder_path, component_slot_panel):
     component_entries = component_slot_panel.get_component_values()
-
     asset_name = os.path.basename(os.path.normpath(asset_folder_path))
 
     filename_to_info = {}
@@ -114,16 +122,17 @@ def generate_ini(asset_folder_path, mod_folder_path, component_slot_panel):
 
     output_mod_path = export_modified_mod(mod_folder_path, "output")
 
-    ini_path = None
-    for file in os.listdir(output_mod_path):
-        if file.lower().endswith(".ini"):
-            ini_path = os.path.join(output_mod_path, file)
-            break
-    if not ini_path:
+    ini_paths = []
+    for root, _, files in os.walk(output_mod_path):
+        for file in files:
+            if file.lower().endswith(".ini"):
+                ini_paths.append(os.path.join(root, file))
+
+    if not ini_paths:
         raise FileNotFoundError("output 폴더 내 ini 파일이 없습니다.")
 
-    modified_config = rename_sections_and_files(
-        ini_path, asset_name, filename_to_info, output_mod_path
-    )
-
-    save_ini_with_duplicates(ini_path, modified_config)
+    for ini_path in ini_paths:
+        modified_config = rename_sections_and_files(
+            ini_path, asset_name, filename_to_info, output_mod_path
+        )
+        save_ini_with_duplicates(ini_path, modified_config)

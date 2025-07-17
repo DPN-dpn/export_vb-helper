@@ -82,6 +82,6 @@ class UIComponents:
             asset_path = self.path_selector.asset_path_var.get()
             mod_path = self.path_selector.mod_path_var.get()
             ini_generator.generate_ini(asset_path, mod_path, self.slot_panel)
-            self.log("✅ generated.ini 생성 및 내보내기 완료")
+            self.log("내보내기 완료")
         except Exception as e:
-            self.log(f"❌ ini 내보내기 실패: {e}")
+            self.log(f"내보내기 실패: {e}")
