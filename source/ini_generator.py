@@ -74,7 +74,8 @@ def rename_sections_and_files(ini_path, asset_name, filename_to_info, mod_folder
             move(old_file_path, new_file_path)
 
             new_section_data = collections.OrderedDict(config[target_section])
-            new_section_data["filename"] = new_filename
+            relative_path_in_ini = os.path.relpath(new_file_path, os.path.dirname(ini_path))
+            new_section_data["filename"] = relative_path_in_ini.replace("\\", "/")
             new_config[new_section] = new_section_data
 
     for section in config:
