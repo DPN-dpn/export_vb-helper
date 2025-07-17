@@ -4,6 +4,11 @@ class ComponentSlotPanel(tk.Frame):
     def __init__(self, master, controller):
         super().__init__(master)
         self.controller = controller
+        self.slot_labels = []
+        self.component_widgets = []
+        self.selected_index = None
+        self.selected_key = None
+        self.selected_variant = None
 
         self.canvas = tk.Canvas(self)
         self.inner_frame = tk.Frame(self.canvas)
@@ -18,103 +23,94 @@ class ComponentSlotPanel(tk.Frame):
         self.inner_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", self._resize_inner_frame)
 
-        self.slot_labels = []
-        self.selected_index = None
-        self.selected_key = None
-        self.selected_variant = None
-        self.component_widgets = []
-
     def _resize_inner_frame(self, event):
         self.canvas.itemconfig(self.inner_window, width=event.width)
 
     def display_components(self, components, mod_files):
         self.components = components
+        self._clear()
 
+        for comp_index, comp in enumerate(components):
+            group_frame = self._create_component_group(comp_index, comp)
+            group_frame.pack(fill="x", padx=10, pady=5, expand=True)
+
+    def _clear(self):
         for widget in self.inner_frame.winfo_children():
             widget.destroy()
-
         self.component_widgets.clear()
         self.slot_labels.clear()
 
-        for comp_index, comp in enumerate(components):
-            group_frame = tk.Frame(self.inner_frame)
-            group_frame.pack(fill="x", padx=10, pady=5, expand=True)
+    def _create_component_group(self, comp_index, comp):
+        group_frame = tk.Frame(self.inner_frame)
+        is_group_expanded = tk.BooleanVar(value=True)
 
-            is_group_expanded = tk.BooleanVar(value=True)
+        title_label = tk.Label(
+            group_frame,
+            text=f"▼ {comp['name']}",
+            font=("Arial", 10, "bold"),
+            anchor="w", cursor="hand2",
+            bg="#ddd", padx=5, pady=2
+        )
+        title_label.pack(fill="x")
 
-            title_label = tk.Label(
-                group_frame,
-                text=f"▼ {comp['name']}",
-                font=("Arial", 10, "bold"),
-                anchor="w",
-                cursor="hand2",
-                bg="#ddd",
-                padx=5, pady=2
-            )
-            title_label.pack(fill="x")
+        body_frame = tk.Frame(group_frame)
+        body_frame.pack(fill="x", padx=5, pady=2)
 
-            body_frame = tk.Frame(group_frame)
-            body_frame.pack(fill="x", padx=5, pady=2)
+        title_label.bind("<Button-1>", lambda e: self._toggle_frame(is_group_expanded, body_frame, title_label, comp["name"]))
 
-            def toggle_group(e=None, var=is_group_expanded, frame=body_frame, label=title_label, name=comp["name"]):
-                if var.get():
-                    frame.pack_forget()
-                    var.set(False)
-                    label.config(text=f"▶ {name}")
-                else:
-                    frame.pack(fill="x", padx=5, pady=2)
-                    var.set(True)
-                    label.config(text=f"▼ {name}")
+        shared_widgets = {
+            key: self._create_slot_row(body_frame, comp_index, key, comp["shared"][key], is_variant=False)
+            for key in comp.get("shared", {})
+        }
 
-            title_label.bind("<Button-1>", toggle_group)
+        variant_widgets = {}
+        for label, variant_data in comp.get("variants", {}).items():
+            variant_widgets[label] = self._create_variant_block(body_frame, comp_index, label, variant_data)
 
-            shared_widgets = {}
-            for key in comp.get("shared", {}):
-                shared_widgets[key] = self._create_slot_row(body_frame, comp_index, key, comp["shared"][key], is_variant=False)
+        self.component_widgets.append({
+            "name": comp['name'],
+            "shared": shared_widgets,
+            "variants": variant_widgets
+        })
 
-            variant_widgets = {}
-            for label, variant_data in comp.get("variants", {}).items():
-                sub_frame = tk.Frame(body_frame)
-                sub_frame.pack(fill="x", padx=(5, 0), pady=4)
+        return group_frame
 
-                is_variant_expanded = tk.BooleanVar(value=True)
+    def _toggle_frame(self, toggle_var, frame, label, name):
+        if toggle_var.get():
+            frame.pack_forget()
+            toggle_var.set(False)
+            label.config(text=f"▶ {name}")
+        else:
+            frame.pack(fill="x", padx=5, pady=2)
+            toggle_var.set(True)
+            label.config(text=f"▼ {name}")
 
-                var_label = tk.Label(
-                    sub_frame,
-                    text=f"▼ {label}",
-                    font=("Arial", 9, "bold"),
-                    anchor="w",
-                    cursor="hand2",
-                    bg="#eee",
-                    padx=5, pady=1
-                )
-                var_label.pack(fill="x")
+    def _create_variant_block(self, parent, comp_index, label, variant_data):
+        sub_frame = tk.Frame(parent)
+        sub_frame.pack(fill="x", padx=(5, 0), pady=4)
 
-                content = tk.Frame(sub_frame)
-                content.pack(fill="x", padx=(5, 0), pady=2)
+        is_variant_expanded = tk.BooleanVar(value=True)
 
-                def toggle_variant(e=None, var=is_variant_expanded, frame=content, label=var_label, name=label):
-                    if var.get():
-                        frame.pack_forget()
-                        var.set(False)
-                        label.config(text=f"▶ {name}")
-                    else:
-                        frame.pack(fill="x", padx=5, pady=2)
-                        var.set(True)
-                        label.config(text=f"▼ {name}")
+        var_label = tk.Label(
+            sub_frame,
+            text=f"▼ {label}",
+            font=("Arial", 9, "bold"),
+            anchor="w", cursor="hand2",
+            bg="#eee", padx=5, pady=1
+        )
+        var_label.pack(fill="x")
 
-                var_label.bind("<Button-1>", toggle_variant)
+        content = tk.Frame(sub_frame)
+        content.pack(fill="x", padx=(5, 0), pady=2)
 
-                sub_widgets = {}
-                for key in variant_data:
-                    sub_widgets[key] = self._create_slot_row(content, comp_index, key, variant_data[key], is_variant=True, variant=label)
-                variant_widgets[label] = sub_widgets
+        var_label.bind("<Button-1>", lambda e: self._toggle_frame(is_variant_expanded, content, var_label, label))
 
-            self.component_widgets.append({
-                "name": comp['name'],
-                "shared": shared_widgets,
-                "variants": variant_widgets
-            })
+        widgets = {
+            key: self._create_slot_row(content, comp_index, key, variant_data[key], is_variant=True, variant=label)
+            for key in variant_data
+        }
+
+        return widgets
 
     def _create_slot_row(self, parent, comp_index, key, hash_value, is_variant=False, variant=None):
         row = tk.Frame(parent)

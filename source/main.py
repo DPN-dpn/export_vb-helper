@@ -1,14 +1,17 @@
 import tkinter as tk
-from component_matcher import ComponentMatcherApp
-from ui.layout import UIComponents
+from ui.layout import MainLayout
+from app.matcher import ComponentMatcherApp
 
-if __name__ == "__main__":
+def main():
     root = tk.Tk()
-    root.geometry("1000x700")
     root.title("엵툵 컴포넌트 매칭기")
+    root.geometry("1000x700")
 
-    ui = UIComponents(root)
-    app = ComponentMatcherApp(root, ui)
-    ui.matcher = app
+    ui = MainLayout(root)
+    app = ComponentMatcherApp(ui)
+    ui.set_matcher(app)
 
     root.mainloop()
+
+if __name__ == "__main__":
+    main()

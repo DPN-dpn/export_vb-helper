@@ -1,10 +1,9 @@
 import os
 import json
-from file_scanner import scan_folder
+from app.file_manager import scan_folder
 
 class ComponentMatcherApp:
-    def __init__(self, root, ui):
-        self.root = root
+    def __init__(self, ui):
         self.ui = ui
         self.asset_files = []
         self.mod_files = []

@@ -3,9 +3,9 @@ from .path_selector import PathSelectorFrame
 from .component_slot_panel import ComponentSlotPanel
 from .mod_file_panel import ModFileListPanel
 from .logger_frame import LoggerFrame
-import ini_generator
+from app import ini_modifier
 
-class UIComponents:
+class MainLayout:
     def __init__(self, root):
         self.root = root
         self.matcher = None
@@ -40,7 +40,10 @@ class UIComponents:
         self.logger = LoggerFrame(self.vertical_pane)
         self.logger.pack(fill="both", expand=True)
         self.vertical_pane.add(self.logger, minsize=30, stretch="always")
-
+        
+    def set_matcher(self, matcher):
+        self.matcher = matcher
+    
     def set_selected_slot(self, index, key, variant=None):
         self.selected_slot = (index, key, variant)
 
@@ -81,7 +84,7 @@ class UIComponents:
         try:
             asset_path = self.path_selector.asset_path_var.get()
             mod_path = self.path_selector.mod_path_var.get()
-            ini_generator.generate_ini(asset_path, mod_path, self.slot_panel)
+            ini_modifier.generate_ini(asset_path, mod_path, self.slot_panel)
             self.log("내보내기 완료")
         except Exception as e:
             self.log(f"내보내기 실패: {e}")
