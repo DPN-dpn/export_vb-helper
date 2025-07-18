@@ -4,6 +4,7 @@ from .component_slot_panel import ComponentSlotPanel
 from .mod_file_panel import ModFileListPanel
 from .logger_frame import LoggerFrame
 from app import ini_modifier
+from config import load_config, save_config
 import subprocess
 import platform
 
@@ -42,6 +43,10 @@ class MainLayout:
         self.logger.pack(fill="both", expand=True)
         self.vertical_pane.add(self.logger, minsize=30, stretch="always")
         
+        config = load_config()
+        self.last_asset_folder = config.get("last_asset_folder")
+        self.last_mod_folder = config.get("last_mod_folder")
+        
     def set_matcher(self, matcher):
         self.matcher = matcher
     
@@ -68,18 +73,30 @@ class MainLayout:
     def log(self, msg):
         self.logger.log(msg)
 
-    def ask_folder(self, title):
+    def ask_folder(self, title, initial_dir=None):
         from tkinter import filedialog
         import os
-        return filedialog.askdirectory(title=title, initialdir=os.getcwd())
+        return filedialog.askdirectory(title=title, initialdir=initial_dir or os.getcwd())
 
     def on_asset_folder_selected(self, folder):
-        if self.matcher:
-            self.matcher.select_asset_folder_from_path(folder)
+        if folder:
+            self.last_asset_folder = folder
+            save_config({
+                "last_asset_folder": folder,
+                "last_mod_folder": self.last_mod_folder
+            })
+            if self.matcher:
+                self.matcher.select_asset_folder_from_path(folder)
 
     def on_mod_folder_selected(self, folder):
-        if self.matcher:
-            self.matcher.select_mod_folder_from_path(folder)
+        if folder:
+            self.last_mod_folder = folder
+            save_config({
+                "last_asset_folder": self.last_asset_folder,
+                "last_mod_folder": folder
+            })
+            if self.matcher:
+                self.matcher.select_mod_folder_from_path(folder)
 
     def export(self):
         try:

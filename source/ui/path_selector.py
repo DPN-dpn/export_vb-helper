@@ -17,13 +17,13 @@ class PathSelectorFrame(tk.Frame):
         tk.Label(self, textvariable=self.mod_path_var, width=60, anchor="w").pack(side="left")
 
     def select_asset(self):
-        folder = filedialog.askdirectory(title="에셋 폴더 선택", initialdir=os.getcwd())
+        folder = filedialog.askdirectory(title="에셋 폴더 선택", initialdir=self.controller.last_asset_folder)
         if folder:
             self.asset_path_var.set(folder)
             self.controller.on_asset_folder_selected(folder)
 
     def select_mod(self):
-        folder = filedialog.askdirectory(title="모드 폴더 선택", initialdir=os.getcwd())
+        folder = filedialog.askdirectory(title="모드 폴더 선택", initialdir=self.controller.last_mod_folder)
         if folder:
             self.mod_path_var.set(folder)
             self.controller.on_mod_folder_selected(folder)
