@@ -4,8 +4,8 @@ import os
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
-    "last_asset_folder": None,
-    "last_mod_folder": None,
+    "last_asset_folder": os.getcwd(),
+    "last_mod_folder": os.getcwd(),
     "output_root": os.path.abspath("output"),
     "open_after_export": True
 }
