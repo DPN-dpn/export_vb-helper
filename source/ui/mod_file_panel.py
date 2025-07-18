@@ -18,7 +18,7 @@ class ModFileListPanel(tk.Frame):
         self.listbox.delete(0, tk.END)
         for fname in sorted(set(file_list)):
             if fname.lower().endswith((".ib", ".buf")):
-                self.listbox.insert(tk.END, os.path.basename(fname))
+                self.listbox.insert(tk.END, fname)
 
     def on_file_selected(self, event):
         sel = self.listbox.curselection()

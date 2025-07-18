@@ -10,14 +10,12 @@ def collect_filename_mapping(components):
         for key, var in comp["shared"].items():
             v = var.get().strip()
             if v:
-                base = os.path.basename(v)
-                mapping[base] = (name, "", key)
+                mapping[v] = (name, "", key)
         for variant_key, slots in comp["variants"].items():
             for key, var in slots.items():
                 v = var.get().strip()
                 if v:
-                    base = os.path.basename(v)
-                    mapping[base] = (name, variant_key, key)
+                    mapping[v] = (name, variant_key, key)
     return mapping
 
 def find_file(base_dir, filename):
