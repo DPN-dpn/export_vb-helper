@@ -27,7 +27,6 @@ class MainLayout:
 
         self.control_frame = tk.Frame(self.main_frame)
         self.control_frame.pack(side="left", padx=5, pady=5)
-        tk.Button(self.control_frame, text="<", command=self.assign_selected_file).pack()
 
         self.file_panel = ModFileListPanel(self.main_frame, self)
         self.file_panel.pack(side="left", fill="y", padx=10)

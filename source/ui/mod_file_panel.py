@@ -11,6 +11,9 @@ class ModFileListPanel(tk.Frame):
         self.listbox.pack(fill="y")
         self.listbox.bind("<<ListboxSelect>>", self.on_file_selected)
 
+        self.listbox.bind("<Double-Button-1>", self.on_file_activate)
+        self.listbox.bind("<Return>", self.on_file_activate)
+
     def set_file_list(self, file_list):
         self.listbox.delete(0, tk.END)
         for fname in sorted(set(file_list)):
@@ -21,3 +24,10 @@ class ModFileListPanel(tk.Frame):
         sel = self.listbox.curselection()
         if sel:
             self.controller.set_selected_file(self.listbox.get(sel[0]))
+            
+    def on_file_activate(self, event):
+        sel = self.listbox.curselection()
+        if sel:
+            fname = self.listbox.get(sel[0])
+            self.controller.set_selected_file(fname)
+            self.controller.assign_selected_file()
