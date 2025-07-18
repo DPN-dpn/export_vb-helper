@@ -20,7 +20,11 @@ goto end
 :run-gui
 echo 감지된 Python 버전: %python-version%
 py -%python-version% ./source/main.py
-pause
-goto end
+if !errorlevel! equ 0 (
+    goto end
+) else (
+    echo [!] 프로그램 오류로 종료됨. 아무 키나 누르면 창이 닫힙니다.
+    pause
+)
 
 :end
