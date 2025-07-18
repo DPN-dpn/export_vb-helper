@@ -4,6 +4,8 @@ from .component_slot_panel import ComponentSlotPanel
 from .mod_file_panel import ModFileListPanel
 from .logger_frame import LoggerFrame
 from app import ini_modifier
+import subprocess
+import platform
 
 class MainLayout:
     def __init__(self, root):
@@ -83,7 +85,13 @@ class MainLayout:
         try:
             asset_path = self.path_selector.asset_path_var.get()
             mod_path = self.path_selector.mod_path_var.get()
-            ini_modifier.generate_ini(asset_path, mod_path, self.slot_panel)
+            output_path = ini_modifier.generate_ini(asset_path, mod_path, self.slot_panel)
             self.log("내보내기 완료")
+            if platform.system() == "Windows":
+                subprocess.Popen(f'explorer "{output_path}"')
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.Popen(["open", output_path])
+            else:  # Linux
+                subprocess.Popen(["xdg-open", output_path])
         except Exception as e:
             self.log(f"내보내기 실패: {e}")

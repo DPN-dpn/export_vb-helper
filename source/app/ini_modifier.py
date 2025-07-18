@@ -97,3 +97,5 @@ def generate_ini(asset_folder_path, mod_folder_path, component_slot_panel):
     for ini_path in ini_files:
         modified = rename_sections_and_files(ini_path, asset_name, filename_map, output_mod_path)
         save_ini_with_duplicates(ini_path, modified)
+    
+    return output_mod_path
