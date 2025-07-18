@@ -43,9 +43,9 @@ class MainLayout:
         self.logger.pack(fill="both", expand=True)
         self.vertical_pane.add(self.logger, minsize=30, stretch="always")
         
-        config = load_config()
-        self.last_asset_folder = config.get("last_asset_folder")
-        self.last_mod_folder = config.get("last_mod_folder")
+        self.config = load_config()
+        self.last_asset_folder = self.config.get("last_asset_folder")
+        self.last_mod_folder = self.config.get("last_mod_folder")
         
     def set_matcher(self, matcher):
         self.matcher = matcher
@@ -102,13 +102,16 @@ class MainLayout:
         try:
             asset_path = self.path_selector.asset_path_var.get()
             mod_path = self.path_selector.mod_path_var.get()
-            output_path = ini_modifier.generate_ini(asset_path, mod_path, self.slot_panel)
+            output_root = self.config.get("output_root", "output")
+            output_path = ini_modifier.generate_ini(asset_path, mod_path, self.slot_panel, output_root)
             self.log("내보내기 완료")
-            if platform.system() == "Windows":
-                subprocess.Popen(f'explorer "{output_path}"')
-            elif platform.system() == "Darwin":  # macOS
-                subprocess.Popen(["open", output_path])
-            else:  # Linux
-                subprocess.Popen(["xdg-open", output_path])
+            if self.config.get("open_after_export", True):
+                import subprocess, platform
+                if platform.system() == "Windows":
+                    subprocess.Popen(f'explorer "{output_path}"')
+                elif platform.system() == "Darwin":
+                    subprocess.Popen(["open", output_path])
+                else:
+                    subprocess.Popen(["xdg-open", output_path])
         except Exception as e:
             self.log(f"내보내기 실패: {e}")

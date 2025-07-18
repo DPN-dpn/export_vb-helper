@@ -78,12 +78,12 @@ def export_modified_mod(mod_folder_path, output_root):
     copytree(mod_folder_path, output_path)
     return output_path
 
-def generate_ini(asset_folder_path, mod_folder_path, component_slot_panel):
+def generate_ini(asset_folder_path, mod_folder_path, component_slot_panel, output_root="output"):
     components = component_slot_panel.get_component_values()
     asset_name = os.path.basename(os.path.normpath(asset_folder_path))
     filename_map = collect_filename_mapping(components)
 
-    output_mod_path = export_modified_mod(mod_folder_path, "output")
+    output_mod_path = export_modified_mod(mod_folder_path, output_root)
 
     ini_files = []
     for root, _, files in os.walk(output_mod_path):
