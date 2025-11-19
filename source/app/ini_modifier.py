@@ -90,7 +90,22 @@ def rename_sections_and_files(ini_path, asset_name, filename_to_info, mod_folder
         for section, kv in new_config.items():
             for key, value in kv.items():
                 if isinstance(value, list):
-                    kv[key] = [section_map.get(v, v) for v in value]
+                    if key.lower() == "drawindexed":
+                        # drawindexed는 dict 구조 허용
+                        continue
+                    new_list = []
+                    for v in value:
+                        if isinstance(v, dict):
+                            val_str = v.get("value", "")
+                            new_list.append(section_map.get(val_str, val_str))
+                        else:
+                            new_list.append(section_map.get(v, v))
+                    kv[key] = new_list
+                elif isinstance(value, dict):
+                    if key.lower() == "drawindexed":
+                        continue
+                    val_str = value.get("value", "")
+                    kv[key] = section_map.get(val_str, val_str)
                 elif isinstance(value, str):
                     kv[key] = section_map.get(value, value)
 

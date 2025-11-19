@@ -49,8 +49,24 @@ def parse_ini_with_duplicates(path):
                 temp_comments.clear()
                 continue
 
+            # 주석 처리된 drawindexed도 파싱
             if stripped.startswith(";") or stripped.startswith("#"):
-                temp_comments.append(raw)
+                comment_content = stripped.lstrip(";# ")
+                if comment_content.lower().startswith("drawindexed") and "=" in comment_content:
+                    # drawindexed = ... 형태의 주석 해제
+                    key, value = map(str.strip, comment_content.split("=", 1))
+                    comments_to_attach = list(temp_comments) if temp_comments else []
+                    if key in temp_pairs:
+                        existing = temp_pairs[key]
+                        if isinstance(existing, dict):
+                            temp_pairs[key] = [existing, {"value": value, "comments": comments_to_attach}]
+                        elif isinstance(existing, list):
+                            temp_pairs[key].append({"value": value, "comments": comments_to_attach})
+                    else:
+                        temp_pairs[key] = {"value": value, "comments": comments_to_attach}
+                    temp_comments.clear()
+                else:
+                    temp_comments.append(raw)
                 continue
 
             if "=" in stripped and temp_section:
@@ -106,7 +122,7 @@ def save_ini_with_duplicates(path, ini_data):
                                 return
                             if isinstance(item, dict):
                                 for c in item.get("comments", []):
-                                    f.write(f"{c}\n")
+                                    f.write(f"{c.lstrip()}\n")
                             f.write(f"{key} = {v}\n")
                             seen.add(v)
                         if isinstance(val, list):
