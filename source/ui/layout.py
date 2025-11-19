@@ -43,9 +43,12 @@ class MainLayout:
         self.logger.pack(fill="both", expand=True)
         self.vertical_pane.add(self.logger, minsize=30, stretch="always")
         
+        import os
         self.config = load_config()
-        self.last_asset_folder = self.config.get("last_asset_folder")
-        self.last_mod_folder = self.config.get("last_mod_folder")
+        asset_folder = self.config.get("last_asset_folder")
+        mod_folder = self.config.get("last_mod_folder")
+        self.last_asset_folder = asset_folder if asset_folder and os.path.exists(asset_folder) else os.getcwd()
+        self.last_mod_folder = mod_folder if mod_folder and os.path.exists(mod_folder) else os.getcwd()
         
     def set_matcher(self, matcher):
         self.matcher = matcher
