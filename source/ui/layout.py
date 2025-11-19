@@ -99,6 +99,7 @@ class MainLayout:
                 self.matcher.select_mod_folder_from_path(folder)
 
     def export(self):
+        import traceback
         try:
             asset_path = self.path_selector.asset_path_var.get()
             mod_path = self.path_selector.mod_path_var.get()
@@ -114,4 +115,6 @@ class MainLayout:
                 else:
                     subprocess.Popen(["xdg-open", output_path])
         except Exception as e:
-            self.log(f"내보내기 실패: {e}")
+            tb = traceback.extract_tb(e.__traceback__)
+            last = tb[-1]
+            self.log(f"내보내기 실패: {e}\n  File: {last.filename}, line {last.lineno}, in {last.name}\n  Code: {last.line}")

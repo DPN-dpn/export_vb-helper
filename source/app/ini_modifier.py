@@ -24,51 +24,82 @@ def find_file(base_dir, filename):
             return os.path.join(root, filename)
     return None
 
+import traceback
+
 def rename_sections_and_files(ini_path, asset_name, filename_to_info, mod_folder_path):
-    def format_kind(kind): return "IB" if kind.lower() == "ib" else kind.capitalize()
+    try:
+        def format_kind(kind): return "IB" if kind.lower() == "ib" else kind.capitalize()
 
-    config = parse_ini_with_duplicates(ini_path)
-    new_config = collections.OrderedDict()
-    section_map = {}
+        config = parse_ini_with_duplicates(ini_path)
+        new_config = collections.OrderedDict()
+        section_map = {}
 
-    for base, (comp_name, variant_key, kind) in filename_to_info.items():
+        for base, (comp_name, variant_key, kind) in filename_to_info.items():
+            for section in config:
+                if section.startswith("Resource"):
+                    filename = config[section].get("filename", "")
+                    if isinstance(filename, list): filename = filename[0]
+                    if os.path.basename(filename) == base:
+                        kind_str = format_kind(kind)
+                        new_section = f"Resource{asset_name}{comp_name}{variant_key}{kind_str}"
+                        section_map[section] = new_section
+
+                        ext = os.path.splitext(base)[1]
+                        new_name = f"{asset_name}{comp_name}{variant_key}{ext}" if kind_str == "IB" else f"{asset_name}{comp_name}{kind_str}{ext}"
+
+                        old_path = find_file(mod_folder_path, base)
+                        if not old_path:
+                            continue
+                        rel = os.path.relpath(old_path, mod_folder_path)
+                        new_path = os.path.join(mod_folder_path, os.path.dirname(rel), new_name)
+                        os.makedirs(os.path.dirname(new_path), exist_ok=True)
+                        move(old_path, new_path)
+
+                        new_data = collections.OrderedDict()
+                        for k, v in config[section].items():
+                            if k.lower() == "drawindexed":
+                                new_data[k] = v
+                            else:
+                                # drawindexed 외에는 dict/list(dict) 구조가 오면 value만 추출
+                                if isinstance(v, dict):
+                                    new_data[k] = v.get("value", "")
+                                elif isinstance(v, list) and v and isinstance(v[0], dict):
+                                    new_data[k] = [item.get("value", "") for item in v]
+                                else:
+                                    new_data[k] = v
+                        new_data["filename"] = os.path.relpath(new_path, os.path.dirname(ini_path)).replace("\\", "/")
+                        new_config[new_section] = new_data
+                        break
+
         for section in config:
-            if section.startswith("Resource"):
-                filename = config[section].get("filename", "")
-                if isinstance(filename, list): filename = filename[0]
-                if os.path.basename(filename) == base:
-                    kind_str = format_kind(kind)
-                    new_section = f"Resource{asset_name}{comp_name}{variant_key}{kind_str}"
-                    section_map[section] = new_section
+            if section not in section_map:
+                # drawindexed 외에는 dict/list(dict) 구조가 오면 value만 추출
+                new_data = collections.OrderedDict()
+                for k, v in config[section].items():
+                    if k.lower() == "drawindexed":
+                        new_data[k] = v
+                    else:
+                        if isinstance(v, dict):
+                            new_data[k] = v.get("value", "")
+                        elif isinstance(v, list) and v and isinstance(v[0], dict):
+                            new_data[k] = [item.get("value", "") for item in v]
+                        else:
+                            new_data[k] = v
+                new_config[section] = new_data
 
-                    ext = os.path.splitext(base)[1]
-                    new_name = f"{asset_name}{comp_name}{variant_key}{ext}" if kind_str == "IB" else f"{asset_name}{comp_name}{kind_str}{ext}"
+        for section, kv in new_config.items():
+            for key, value in kv.items():
+                if isinstance(value, list):
+                    kv[key] = [section_map.get(v, v) for v in value]
+                elif isinstance(value, str):
+                    kv[key] = section_map.get(value, value)
 
-                    old_path = find_file(mod_folder_path, base)
-                    if not old_path:
-                        continue
-                    rel = os.path.relpath(old_path, mod_folder_path)
-                    new_path = os.path.join(mod_folder_path, os.path.dirname(rel), new_name)
-                    os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                    move(old_path, new_path)
-
-                    new_data = collections.OrderedDict(config[section])
-                    new_data["filename"] = os.path.relpath(new_path, os.path.dirname(ini_path)).replace("\\", "/")
-                    new_config[new_section] = new_data
-                    break
-
-    for section in config:
-        if section not in section_map:
-            new_config[section] = config[section]
-
-    for section, kv in new_config.items():
-        for key, value in kv.items():
-            if isinstance(value, list):
-                kv[key] = [section_map.get(v, v) for v in value]
-            elif isinstance(value, str):
-                kv[key] = section_map.get(value, value)
-
-    return new_config
+        return new_config
+    except Exception as e:
+        tb = traceback.extract_tb(e.__traceback__)
+        last = tb[-1]
+        print(f"[rename_sections_and_files] {type(e).__name__}: {e}\n  File: {last.filename}, line {last.lineno}, in {last.name}\n  Code: {last.line}")
+        raise
 
 def export_modified_mod(mod_folder_path, output_root):
     name = os.path.basename(mod_folder_path.rstrip("/\\"))
