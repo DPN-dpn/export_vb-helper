@@ -107,7 +107,7 @@ class MainLayout:
             asset_path = self.path_selector.asset_path_var.get()
             mod_path = self.path_selector.mod_path_var.get()
             output_root = self.config.get("output_root", "output")
-            output_path = ini_modifier.generate_ini(asset_path, mod_path, self.slot_panel, output_root)
+            output_path = ini_modifier.generate_ini(asset_path, mod_path, self.slot_panel, output_root, self.logger)
             self.log("내보내기 완료")
             if self.config.get("open_after_export", True):
                 import subprocess, platform
