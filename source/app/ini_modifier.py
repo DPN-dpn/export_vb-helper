@@ -21,6 +21,10 @@ def collect_filename_mapping(components, logger=None):
     return mapping
 
 def find_file(base_dir, filename):
+    # 루트에 꺼내진 파일 우선 확인
+    root_path = os.path.join(base_dir, os.path.basename(filename))
+    if os.path.exists(root_path):
+        return root_path
     # 경로가 포함된 경우 직접 확인
     direct_path = os.path.join(base_dir, filename)
     if os.path.exists(direct_path):
@@ -31,6 +35,46 @@ def find_file(base_dir, filename):
         if fname in files:
             return os.path.join(root, fname)
     return None
+def extract_files_to_root(mod_folder_path, filename_map, logger=None):
+    """
+    매칭된 파일들과 ini 파일을 모드폴더 루트로 복사
+    """
+    root_dir = mod_folder_path
+    extracted = set()
+    # 매칭된 파일들 꺼내기
+    for base in filename_map.keys():
+        src_path = find_file(mod_folder_path, base)
+        if src_path:
+            dst_path = os.path.join(root_dir, os.path.basename(base))
+            if src_path != dst_path:
+                try:
+                    if os.path.exists(dst_path):
+                        os.remove(dst_path)
+                    move(src_path, dst_path)
+                    extracted.add(dst_path)
+                    if logger:
+                        logger.log(f"[extract_files_to_root] 파일 이동: {src_path} -> {dst_path}")
+                except Exception as e:
+                    if logger:
+                        logger.log(f"[extract_files_to_root] 파일 이동 실패: {src_path} -> {dst_path}, {e}")
+    # ini 파일 꺼내기
+    for root, _, files in os.walk(mod_folder_path):
+        for file in files:
+            if file.lower().endswith(".ini"):
+                src_path = os.path.join(root, file)
+                dst_path = os.path.join(root_dir, file)
+                if src_path != dst_path:
+                    try:
+                        if os.path.exists(dst_path):
+                            os.remove(dst_path)
+                        move(src_path, dst_path)
+                        extracted.add(dst_path)
+                        if logger:
+                            logger.log(f"[extract_files_to_root] INI 이동: {src_path} -> {dst_path}")
+                    except Exception as e:
+                        if logger:
+                            logger.log(f"[extract_files_to_root] INI 이동 실패: {src_path} -> {dst_path}, {e}")
+    return list(extracted)
 
 import traceback
 
@@ -147,12 +191,16 @@ def export_modified_mod(mod_folder_path, output_root, logger=None):
         logger.log(f"[export_modified_mod] 복사 완료: {output_path}")
     return output_path
 
+
 def generate_ini(asset_folder_path, mod_folder_path, component_slot_panel, output_root="output", logger=None):
     components = component_slot_panel.get_component_values()
     asset_name = os.path.basename(os.path.normpath(asset_folder_path))
     filename_map = collect_filename_mapping(components, logger)
 
     output_mod_path = export_modified_mod(mod_folder_path, output_root, logger)
+
+    # 매칭된 파일들과 ini를 루트로 꺼내기
+    extract_files_to_root(output_mod_path, filename_map, logger)
 
     ini_files = []
     if logger:
@@ -161,14 +209,16 @@ def generate_ini(asset_folder_path, mod_folder_path, component_slot_panel, outpu
         for file in files:
             if file.lower().endswith(".ini"):
                 ini_path = os.path.join(root, file)
-                ini_files.append(ini_path)
-                if logger:
-                    logger.log(f"[generate_ini] INI 파일 발견: {ini_path}")
+                # 루트에 있는 ini만 추가
+                if os.path.dirname(ini_path) == output_mod_path:
+                    ini_files.append(ini_path)
+                    if logger:
+                        logger.log(f"[generate_ini] INI 파일 발견: {ini_path}")
 
     if not ini_files:
         if logger:
-            logger.log("[generate_ini] output 폴더 내 ini 파일이 없습니다.")
-        raise FileNotFoundError("output 폴더 내 ini 파일이 없습니다.")
+            logger.log("[generate_ini] output 폴더 루트에 ini 파일이 없습니다.")
+        raise FileNotFoundError("output 폴더 루트에 ini 파일이 없습니다.")
 
     for ini_path in ini_files:
         if logger:
