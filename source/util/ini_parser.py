@@ -1,6 +1,6 @@
-
 import collections
 import traceback
+
 
 def parse_ini_with_duplicates(path):
     ini_data = collections.OrderedDict()
@@ -13,7 +13,10 @@ def parse_ini_with_duplicates(path):
     def add_key_with_comment(key, value, comments):
         # drawindexed에만 주석 연결, 아니면 일반 저장
         if key.lower() == "drawindexed":
-            temp_pairs[key] = {"value": value, "comments": list(comments) if comments else []}
+            temp_pairs[key] = {
+                "value": value,
+                "comments": list(comments) if comments else [],
+            }
         else:
             temp_pairs[key] = value
 
@@ -27,7 +30,8 @@ def parse_ini_with_duplicates(path):
 
             if stripped.startswith("[") and stripped.endswith("]"):
                 if temp_section and not (
-                    temp_section.startswith("Resource") and temp_pairs.get("type") == "StructuredBuffer"
+                    temp_section.startswith("Resource")
+                    and temp_pairs.get("type") == "StructuredBuffer"
                 ):
                     ini_data[temp_section] = temp_pairs
                 temp_section = stripped[1:-1].strip()
@@ -52,18 +56,29 @@ def parse_ini_with_duplicates(path):
             # 주석 처리된 drawindexed도 파싱
             if stripped.startswith(";") or stripped.startswith("#"):
                 comment_content = stripped.lstrip(";# ")
-                if comment_content.lower().startswith("drawindexed") and "=" in comment_content:
+                if (
+                    comment_content.lower().startswith("drawindexed")
+                    and "=" in comment_content
+                ):
                     # drawindexed = ... 형태의 주석 해제
                     key, value = map(str.strip, comment_content.split("=", 1))
                     comments_to_attach = list(temp_comments) if temp_comments else []
                     if key in temp_pairs:
                         existing = temp_pairs[key]
                         if isinstance(existing, dict):
-                            temp_pairs[key] = [existing, {"value": value, "comments": comments_to_attach}]
+                            temp_pairs[key] = [
+                                existing,
+                                {"value": value, "comments": comments_to_attach},
+                            ]
                         elif isinstance(existing, list):
-                            temp_pairs[key].append({"value": value, "comments": comments_to_attach})
+                            temp_pairs[key].append(
+                                {"value": value, "comments": comments_to_attach}
+                            )
                     else:
-                        temp_pairs[key] = {"value": value, "comments": comments_to_attach}
+                        temp_pairs[key] = {
+                            "value": value,
+                            "comments": comments_to_attach,
+                        }
                     temp_comments.clear()
                 else:
                     temp_comments.append(raw)
@@ -86,9 +101,14 @@ def parse_ini_with_duplicates(path):
                     if key.lower() == "drawindexed":
                         # 여러 drawindexed가 있을 때 각각 주석도 리스트로
                         if isinstance(existing, dict):
-                            temp_pairs[key] = [existing, {"value": value, "comments": comments_to_attach}]
+                            temp_pairs[key] = [
+                                existing,
+                                {"value": value, "comments": comments_to_attach},
+                            ]
                         elif isinstance(existing, list):
-                            temp_pairs[key].append({"value": value, "comments": comments_to_attach})
+                            temp_pairs[key].append(
+                                {"value": value, "comments": comments_to_attach}
+                            )
                     else:
                         if isinstance(existing, list):
                             existing.append(value)
@@ -102,11 +122,13 @@ def parse_ini_with_duplicates(path):
                 temp_comments.clear()
 
     if temp_section and not (
-        temp_section.startswith("Resource") and temp_pairs.get("type") == "StructuredBuffer"
+        temp_section.startswith("Resource")
+        and temp_pairs.get("type") == "StructuredBuffer"
     ):
         ini_data[temp_section] = temp_pairs
 
     return ini_data
+
 
 def save_ini_with_duplicates(path, ini_data):
     try:
@@ -116,6 +138,7 @@ def save_ini_with_duplicates(path, ini_data):
                 for key, val in pairs.items():
                     if key.lower() == "drawindexed":
                         seen = set()
+
                         def write_drawindexed(item):
                             v = item["value"] if isinstance(item, dict) else item
                             if v in seen:
@@ -125,6 +148,7 @@ def save_ini_with_duplicates(path, ini_data):
                                     f.write(f"{c.lstrip()}\n")
                             f.write(f"{key} = {v}\n")
                             seen.add(v)
+
                         if isinstance(val, list):
                             for item in val:
                                 write_drawindexed(item)
@@ -140,5 +164,7 @@ def save_ini_with_duplicates(path, ini_data):
     except Exception as e:
         tb = traceback.extract_tb(e.__traceback__)
         last = tb[-1]
-        print(f"[save_ini_with_duplicates] {type(e).__name__}: {e}\n  File: {last.filename}, line {last.lineno}, in {last.name}\n  Code: {last.line}")
+        print(
+            f"[save_ini_with_duplicates] {type(e).__name__}: {e}\n  File: {last.filename}, line {last.lineno}, in {last.name}\n  Code: {last.line}"
+        )
         raise

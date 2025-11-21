@@ -7,8 +7,9 @@ DEFAULT_CONFIG = {
     "last_asset_folder": os.getcwd(),
     "last_mod_folder": os.getcwd(),
     "output_root": os.path.abspath("output"),
-    "open_after_export": True
+    "open_after_export": True,
 }
+
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -20,6 +21,7 @@ def load_config():
     else:
         save_config(DEFAULT_CONFIG)
         return DEFAULT_CONFIG
+
 
 def save_config(data):
     if "output_root" in data and data["output_root"]:

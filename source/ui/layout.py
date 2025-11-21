@@ -8,6 +8,7 @@ from config import load_config, save_config
 import subprocess
 import platform
 
+
 class MainLayout:
     def __init__(self, root):
         self.root = root
@@ -35,24 +36,33 @@ class MainLayout:
         self.file_panel.pack(side="left", fill="y", padx=10)
 
         self.export_frame = tk.Frame(self.vertical_pane)
-        self.export_button = tk.Button(self.export_frame, text="내보내기", command=self.export)
+        self.export_button = tk.Button(
+            self.export_frame, text="내보내기", command=self.export
+        )
         self.export_button.pack(pady=5, padx=10, fill="x")
         self.vertical_pane.add(self.export_frame, stretch="never")
 
         self.logger = LoggerFrame(self.vertical_pane)
         self.logger.pack(fill="both", expand=True)
         self.vertical_pane.add(self.logger, minsize=30, stretch="always")
-        
+
         import os
+
         self.config = load_config()
         asset_folder = self.config.get("last_asset_folder")
         mod_folder = self.config.get("last_mod_folder")
-        self.last_asset_folder = asset_folder if asset_folder and os.path.exists(asset_folder) else os.getcwd()
-        self.last_mod_folder = mod_folder if mod_folder and os.path.exists(mod_folder) else os.getcwd()
-        
+        self.last_asset_folder = (
+            asset_folder
+            if asset_folder and os.path.exists(asset_folder)
+            else os.getcwd()
+        )
+        self.last_mod_folder = (
+            mod_folder if mod_folder and os.path.exists(mod_folder) else os.getcwd()
+        )
+
     def set_matcher(self, matcher):
         self.matcher = matcher
-    
+
     def set_selected_slot(self, index, key, variant=None):
         self.selected_slot = (index, key, variant)
 
@@ -79,38 +89,43 @@ class MainLayout:
     def ask_folder(self, title, initial_dir=None):
         from tkinter import filedialog
         import os
-        return filedialog.askdirectory(title=title, initialdir=initial_dir or os.getcwd())
+
+        return filedialog.askdirectory(
+            title=title, initialdir=initial_dir or os.getcwd()
+        )
 
     def on_asset_folder_selected(self, folder):
         if folder:
             self.last_asset_folder = folder
-            save_config({
-                "last_asset_folder": folder,
-                "last_mod_folder": self.last_mod_folder
-            })
+            save_config(
+                {"last_asset_folder": folder, "last_mod_folder": self.last_mod_folder}
+            )
             if self.matcher:
                 self.matcher.select_asset_folder_from_path(folder)
 
     def on_mod_folder_selected(self, folder):
         if folder:
             self.last_mod_folder = folder
-            save_config({
-                "last_asset_folder": self.last_asset_folder,
-                "last_mod_folder": folder
-            })
+            save_config(
+                {"last_asset_folder": self.last_asset_folder, "last_mod_folder": folder}
+            )
             if self.matcher:
                 self.matcher.select_mod_folder_from_path(folder)
 
     def export(self):
         import traceback
+
         try:
             asset_path = self.path_selector.asset_path_var.get()
             mod_path = self.path_selector.mod_path_var.get()
             output_root = self.config.get("output_root", "output")
-            output_path = ini_modifier.generate_ini(asset_path, mod_path, self.slot_panel, output_root, self.logger)
+            output_path = ini_modifier.generate_ini(
+                asset_path, mod_path, self.slot_panel, output_root, self.logger
+            )
             self.log("내보내기 완료")
             if self.config.get("open_after_export", True):
                 import subprocess, platform
+
                 if platform.system() == "Windows":
                     subprocess.Popen(f'explorer "{output_path}"')
                 elif platform.system() == "Darwin":
@@ -120,4 +135,6 @@ class MainLayout:
         except Exception as e:
             tb = traceback.extract_tb(e.__traceback__)
             last = tb[-1]
-            self.log(f"내보내기 실패: {e}\n  File: {last.filename}, line {last.lineno}, in {last.name}\n  Code: {last.line}")
+            self.log(
+                f"내보내기 실패: {e}\n  File: {last.filename}, line {last.lineno}, in {last.name}\n  Code: {last.line}"
+            )

@@ -2,6 +2,7 @@ import tkinter as tk
 from ui.layout import MainLayout
 from app.matcher import ComponentMatcherApp
 
+
 def main():
     root = tk.Tk()
     root.title("엵툵 컴포넌트 매칭기")
@@ -12,6 +13,7 @@ def main():
     ui.set_matcher(app)
 
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()

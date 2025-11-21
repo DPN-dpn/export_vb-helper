@@ -1,5 +1,6 @@
 import tkinter as tk
 
+
 class ComponentSlotPanel(tk.Frame):
     def __init__(self, master, controller):
         super().__init__(master)
@@ -12,15 +13,22 @@ class ComponentSlotPanel(tk.Frame):
 
         self.canvas = tk.Canvas(self)
         self.inner_frame = tk.Frame(self.canvas)
-        self.scrollbar = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollbar = tk.Scrollbar(
+            self, orient="vertical", command=self.canvas.yview
+        )
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
-        self.inner_window = self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw")
+        self.inner_window = self.canvas.create_window(
+            (0, 0), window=self.inner_frame, anchor="nw"
+        )
 
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
 
-        self.inner_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.inner_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
+        )
         self.canvas.bind("<Configure>", self._resize_inner_frame)
 
     def _resize_inner_frame(self, event):
@@ -48,30 +56,44 @@ class ComponentSlotPanel(tk.Frame):
             group_frame,
             text=f"▼ {comp['name']}",
             font=("Arial", 10, "bold"),
-            anchor="w", cursor="hand2",
-            bg="#ddd", padx=5, pady=2
+            anchor="w",
+            cursor="hand2",
+            bg="#ddd",
+            padx=5,
+            pady=2,
         )
         title_label.pack(fill="x")
 
         body_frame = tk.Frame(group_frame)
         body_frame.pack(fill="x", padx=5, pady=2)
 
-        title_label.bind("<Button-1>", lambda e: self._toggle_frame(is_group_expanded, body_frame, title_label, comp["name"]))
+        title_label.bind(
+            "<Button-1>",
+            lambda e: self._toggle_frame(
+                is_group_expanded, body_frame, title_label, comp["name"]
+            ),
+        )
 
         shared_widgets = {
-            key: self._create_slot_row(body_frame, comp_index, key, comp["shared"][key], is_variant=False)
+            key: self._create_slot_row(
+                body_frame, comp_index, key, comp["shared"][key], is_variant=False
+            )
             for key in comp.get("shared", {})
         }
 
         variant_widgets = {}
         for label, variant_data in comp.get("variants", {}).items():
-            variant_widgets[label] = self._create_variant_block(body_frame, comp_index, label, variant_data)
+            variant_widgets[label] = self._create_variant_block(
+                body_frame, comp_index, label, variant_data
+            )
 
-        self.component_widgets.append({
-            "name": comp['name'],
-            "shared": shared_widgets,
-            "variants": variant_widgets
-        })
+        self.component_widgets.append(
+            {
+                "name": comp["name"],
+                "shared": shared_widgets,
+                "variants": variant_widgets,
+            }
+        )
 
         return group_frame
 
@@ -95,52 +117,89 @@ class ComponentSlotPanel(tk.Frame):
             sub_frame,
             text=f"▼ {label}",
             font=("Arial", 9, "bold"),
-            anchor="w", cursor="hand2",
-            bg="#eee", padx=5, pady=1
+            anchor="w",
+            cursor="hand2",
+            bg="#eee",
+            padx=5,
+            pady=1,
         )
         var_label.pack(fill="x")
 
         content = tk.Frame(sub_frame)
         content.pack(fill="x", padx=(5, 0), pady=2)
 
-        var_label.bind("<Button-1>", lambda e: self._toggle_frame(is_variant_expanded, content, var_label, label))
+        var_label.bind(
+            "<Button-1>",
+            lambda e: self._toggle_frame(
+                is_variant_expanded, content, var_label, label
+            ),
+        )
 
         widgets = {
-            key: self._create_slot_row(content, comp_index, key, variant_data[key], is_variant=True, variant=label)
+            key: self._create_slot_row(
+                content,
+                comp_index,
+                key,
+                variant_data[key],
+                is_variant=True,
+                variant=label,
+            )
             for key in variant_data
         }
 
         return widgets
 
-    def _create_slot_row(self, parent, comp_index, key, hash_value, is_variant=False, variant=None):
+    def _create_slot_row(
+        self, parent, comp_index, key, hash_value, is_variant=False, variant=None
+    ):
         row = tk.Frame(parent)
         row.pack(fill="x", pady=2, expand=True)
 
         key_label = tk.Label(row, text=key, width=12, anchor="w")
         key_label.grid(row=0, column=0, padx=2, sticky="w")
-        key_label.bind("<Button-1>", lambda e: self.select_slot(comp_index, key, variant))
+        key_label.bind(
+            "<Button-1>", lambda e: self.select_slot(comp_index, key, variant)
+        )
 
-        hash_label = tk.Label(row, text=hash_value or "", width=15, anchor="w", bg="#f0f0f0")
+        hash_label = tk.Label(
+            row, text=hash_value or "", width=15, anchor="w", bg="#f0f0f0"
+        )
         hash_label.grid(row=0, column=1, padx=2, sticky="w")
-        hash_label.bind("<Button-1>", lambda e: self.select_slot(comp_index, key, variant))
+        hash_label.bind(
+            "<Button-1>", lambda e: self.select_slot(comp_index, key, variant)
+        )
 
         val = tk.StringVar(value="")
-        file_label = tk.Label(row, textvariable=val, anchor="w", bg="#f7f7f7", relief="sunken")
+        file_label = tk.Label(
+            row, textvariable=val, anchor="w", bg="#f7f7f7", relief="sunken"
+        )
         file_label.grid(row=0, column=2, padx=2, sticky="we")
-        file_label.bind("<Button-1>", lambda e: self.select_slot(comp_index, key, variant))
+        file_label.bind(
+            "<Button-1>", lambda e: self.select_slot(comp_index, key, variant)
+        )
 
-        clear_btn = tk.Button(row, text="X", command=lambda: self.set_slot_value(comp_index, key, "", variant), fg="red", width=2)
+        clear_btn = tk.Button(
+            row,
+            text="X",
+            command=lambda: self.set_slot_value(comp_index, key, "", variant),
+            fg="red",
+            width=2,
+        )
         clear_btn.grid(row=0, column=3, padx=2, sticky="e")
 
         row.columnconfigure(2, weight=1)
         row.columnconfigure(3, weight=0)
 
-        self.slot_labels.append((comp_index, key, variant, key_label, hash_label, file_label))
+        self.slot_labels.append(
+            (comp_index, key, variant, key_label, hash_label, file_label)
+        )
         return val
 
     def select_slot(self, comp_index, key, variant=None):
         if self.selected_index is not None and self.selected_key is not None:
-            self.set_slot_highlight(self.selected_index, self.selected_key, False, self.selected_variant)
+            self.set_slot_highlight(
+                self.selected_index, self.selected_key, False, self.selected_variant
+            )
 
         self.selected_index = comp_index
         self.selected_key = key
@@ -171,7 +230,9 @@ class ComponentSlotPanel(tk.Frame):
         if value:
             self.controller.log(f"[할당] {comp_name} ({label}) - {key} ← {value}")
         else:
-            self.controller.log(f"[비움] {comp_name} ({label}) - {key} 슬롯이 비워졌습니다.")
+            self.controller.log(
+                f"[비움] {comp_name} ({label}) - {key} 슬롯이 비워졌습니다."
+            )
 
     def get_component_values(self):
         return self.component_widgets

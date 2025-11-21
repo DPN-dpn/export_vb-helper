@@ -1,6 +1,7 @@
 import tkinter as tk
 from datetime import datetime
 
+
 class LoggerFrame(tk.Frame):
     def __init__(self, master):
         super().__init__(master)

@@ -1,6 +1,7 @@
 import tkinter as tk
 import os
 
+
 class ModFileListPanel(tk.Frame):
     def __init__(self, master, controller):
         super().__init__(master)

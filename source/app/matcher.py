@@ -2,6 +2,7 @@ import os
 import json
 from app.file_manager import scan_folder
 
+
 class ComponentMatcherApp:
     def __init__(self, ui):
         self.ui = ui
@@ -55,17 +56,13 @@ class ComponentMatcherApp:
 
                 variants = {}
                 for i, label in enumerate(classifications):
-                    variant = {
-                        "ib": entry.get("ib")
-                    }
+                    variant = {"ib": entry.get("ib")}
 
                     variants[label] = variant
 
-                components.append({
-                    "name": name,
-                    "shared": shared,
-                    "variants": variants
-                })
+                components.append(
+                    {"name": name, "shared": shared, "variants": variants}
+                )
 
             self.components = components
             self.ui.display_components(self.components, self.mod_files)
