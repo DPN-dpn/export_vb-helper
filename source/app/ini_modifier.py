@@ -39,7 +39,7 @@ def _collect_matched_pairs(asset_folder_path, component_slot_panel, logger):
         for key, var in comp_widget.get("shared", {}).items():
             value = var.get()
             if value:
-                slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}{key.capitalize()}"
+                slot_name = f"{asset_name}{comp_name}{key}"
                 matched_pairs.append((slot_name, value))
         
         # variant 슬롯 처리
@@ -49,14 +49,14 @@ def _collect_matched_pairs(asset_folder_path, component_slot_panel, logger):
                 if value:
                     if key.lower() == "ib":
                         if variant_name:
-                            slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}{variant_name.capitalize()}"
+                            slot_name = f"{asset_name}{comp_name}{variant_name}"
                         else:
-                            slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}"
+                            slot_name = f"{asset_name}{comp_name}"
                     else:
                         if variant_name:
-                            slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}{variant_name.capitalize()}{key.capitalize()}"
+                            slot_name = f"{asset_name}{comp_name}{variant_name}{key}"
                         else:
-                            slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}{key.capitalize()}"
+                            slot_name = f"{asset_name}{comp_name}{key}"
                     matched_pairs.append((slot_name, value))
     
     logger.log(f"매칭된 파일 수: {len(matched_pairs)}개")

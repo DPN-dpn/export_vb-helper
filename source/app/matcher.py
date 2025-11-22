@@ -49,14 +49,14 @@ class ComponentMatcherApp:
                     texture_sets = [texture_sets[0] if texture_sets else []]
 
                 shared = {
-                    "blend": entry.get("blend_vb"),
-                    "position": entry.get("position_vb"),
-                    "texcoord": entry.get("texcoord_vb"),
+                    "Blend": entry.get("blend_vb"),
+                    "Position": entry.get("position_vb"),
+                    "Texcoord": entry.get("texcoord_vb"),
                 }
 
                 variants = {}
                 for i, label in enumerate(classifications):
-                    variant = {"ib": entry.get("ib")}
+                    variant = {"IB": entry.get("ib")}
 
                     variants[label] = variant
 
