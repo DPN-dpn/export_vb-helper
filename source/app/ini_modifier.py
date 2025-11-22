@@ -232,10 +232,103 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
             logger.log(f"    최종 교체: {temp_str} -> {final_name_no_ext}")
             ini_content = ini_content.replace(temp_str, final_name_no_ext)
         
+        # 4-3단계: 특정 구문 스킵
+        logger.log(f"  4-3단계: 특정 구문 처리 중...")
+        
+        # 4-3-1단계: Resource로 시작하고 CS로 끝나는 섹션 삭제 (붕스 대응)
+        ini_content = _remove_resource_cs_sections(ini_content, logger)
+        
+        # 4-3-2단계: Resource로 시작하는데 filename=이 없는 섹션 삭제 및 참조 제거 (copy vb 대응)
+        ini_content = _remove_resource_sections_without_filename(ini_content, logger)
+        
         with open(ini_path, 'w', encoding='utf-8') as f:
             f.write(ini_content)
         
         logger.log(f"  완료: {new_ini_filename}")
+
+
+def _remove_resource_cs_sections(ini_content, logger):
+    """4-3-1단계: Resource로 시작하고 CS로 끝나는 섹션 삭제"""
+    sections_to_remove = []
+    lines = ini_content.split('\n')
+    
+    for i, line in enumerate(lines):
+        line_stripped = line.strip()
+        if line_stripped.startswith('[') and line_stripped.endswith(']'):
+            section_name = line_stripped[1:-1].strip()
+            if section_name.startswith('Resource') and section_name.endswith('CS'):
+                sections_to_remove.append(section_name)
+                logger.log(f"    삭제할 섹션 발견: {section_name}")
+    
+    # 섹션 삭제
+    for section_name in sections_to_remove:
+        pattern = rf'\[{re.escape(section_name)}\].*?(?=\n\[|\Z)'
+        ini_content = re.sub(pattern, '', ini_content, flags=re.DOTALL)
+    
+    return ini_content
+
+
+def _remove_resource_sections_without_filename(ini_content, logger):
+    """4-3-2단계: Resource로 시작하는데 filename=이 없는 섹션 삭제 및 참조 제거"""
+    sections_to_remove = []
+    lines = ini_content.split('\n')
+    
+    i = 0
+    while i < len(lines):
+        line_stripped = lines[i].strip()
+        
+        # 섹션 시작 찾기
+        if line_stripped.startswith('[') and line_stripped.endswith(']'):
+            section_name = line_stripped[1:-1].strip()
+            
+            if section_name.startswith('Resource'):
+                # 다음 섹션까지 확인
+                j = i + 1
+                has_filename = False
+                
+                while j < len(lines):
+                    next_line = lines[j].strip()
+                    
+                    # 다음 섹션 시작
+                    if next_line.startswith('[') and next_line.endswith(']'):
+                        break
+                    
+                    # filename= 구문 확인
+                    if next_line.lower().startswith('filename'):
+                        has_filename = True
+                        break
+                    
+                    j += 1
+                
+                if not has_filename:
+                    sections_to_remove.append(section_name)
+                    logger.log(f"    filename 없는 섹션 발견: {section_name}")
+        
+        i += 1
+    
+    # 섹션 삭제
+    for section_name in sections_to_remove:
+        pattern = rf'\[{re.escape(section_name)}\].*?(?=\n\[|\Z)'
+        ini_content = re.sub(pattern, '', ini_content, flags=re.DOTALL)
+    
+    # 참조 제거 (해당 섹션 이름을 포함하는 줄 삭제)
+    for section_name in sections_to_remove:
+        lines = ini_content.split('\n')
+        filtered_lines = []
+        
+        for line in lines:
+            # 섹션 헤더가 아니면서 섹션 이름을 포함하는 줄 제거
+            line_stripped = line.strip()
+            if not (line_stripped.startswith('[') and line_stripped.endswith(']')):
+                if section_name in line:
+                    logger.log(f"    참조 제거: {line.strip()}")
+                    continue
+            
+            filtered_lines.append(line)
+        
+        ini_content = '\n'.join(filtered_lines)
+    
+    return ini_content
 
 
 def generate_ini(
