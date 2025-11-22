@@ -101,7 +101,10 @@ def rename_sections_and_files(
         config = parse_ini_with_duplicates(ini_path)
         new_config = collections.OrderedDict()
         section_map = {}
+        temp_file_map = {}  # {old_path: temp_path}
+        temp_filename_map = {}  # {old_filename: temp_filename}
 
+        # 1차: 파일명/경로를 임시문자열로 먼저 치환
         for base, (comp_name, variant_key, kind) in filename_to_info.items():
             for section in config:
                 if section.startswith("Resource"):
@@ -134,14 +137,16 @@ def rename_sections_and_files(
                                 )
                             continue
                         rel = os.path.relpath(old_path, mod_folder_path)
-                        new_path = os.path.join(
-                            mod_folder_path, os.path.dirname(rel), new_name
+                        temp_path = os.path.join(
+                            mod_folder_path, os.path.dirname(rel), f"[__REPLACE_FILE_{asset_name}_{comp_name}_{variant_key}_{kind_str}__]{ext}"
                         )
-                        os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                        move(old_path, new_path)
+                        temp_file_map[old_path] = (temp_path, new_name)
+                        temp_filename_map[filename] = f"[__REPLACE_FILE_{asset_name}_{comp_name}_{variant_key}_{kind_str}__]{ext}"
+                        os.makedirs(os.path.dirname(temp_path), exist_ok=True)
+                        move(old_path, temp_path)
                         if logger:
                             logger.log(
-                                f"[rename_sections_and_files] 파일 이동: {old_path} -> {new_path}"
+                                f"[rename_sections_and_files] 파일 임시 이동: {old_path} -> {temp_path}"
                             )
 
                         new_data = collections.OrderedDict()
@@ -149,7 +154,6 @@ def rename_sections_and_files(
                             if k.lower() == "drawindexed":
                                 new_data[k] = v
                             else:
-                                # drawindexed 외에는 dict/list(dict) 구조가 오면 value만 추출
                                 if isinstance(v, dict):
                                     new_data[k] = v.get("value", "")
                                 elif (
@@ -158,15 +162,72 @@ def rename_sections_and_files(
                                     new_data[k] = [item.get("value", "") for item in v]
                                 else:
                                     new_data[k] = v
-                        new_data["filename"] = os.path.relpath(
-                            new_path, os.path.dirname(ini_path)
-                        ).replace("\\", "/")
+                        new_data["filename"] = temp_filename_map[filename]
                         if logger:
                             logger.log(
-                                f"[rename_sections_and_files] 섹션명 변경: {section} -> {new_section}, 파일명 변경: {filename} -> {new_data['filename']}"
+                                f"[rename_sections_and_files] 섹션명 변경: {section} -> {new_section}, 파일명 임시 변경: {filename} -> {new_data['filename']}"
                             )
                         new_config[new_section] = new_data
                         break
+
+        # 기존 방식대로 나머지 섹션 처리
+        for section in config:
+            if section not in section_map:
+                new_data = collections.OrderedDict()
+                for k, v in config[section].items():
+                    if k.lower() == "drawindexed":
+                        new_data[k] = v
+                    else:
+                        if isinstance(v, dict):
+                            new_data[k] = v.get("value", "")
+                        elif isinstance(v, list) and v and isinstance(v[0], dict):
+                            new_data[k] = [item.get("value", "") for item in v]
+                        else:
+                            new_data[k] = v
+                new_config[section] = new_data
+
+        # 2차: 임시문자열을 실제 파일명/경로로 치환
+        for temp_path, new_name in temp_file_map.values():
+            final_path = os.path.join(os.path.dirname(temp_path), new_name)
+            move(temp_path, final_path)
+            if logger:
+                logger.log(f"[rename_sections_and_files] 파일 최종 이동: {temp_path} -> {final_path}")
+
+        for section, kv in new_config.items():
+            for key, value in kv.items():
+                if isinstance(value, list):
+                    if key.lower() == "drawindexed":
+                        continue
+                    new_list = []
+                    for v in value:
+                        if isinstance(v, dict):
+                            val_str = v.get("value", "")
+                            new_list.append(section_map.get(val_str, val_str))
+                        else:
+                            # 임시문자열 치환
+                            if isinstance(v, str) and v.startswith("[__REPLACE_FILE_"):
+                                # 임시문자열을 실제 파일명으로 치환
+                                for _, new_name in temp_file_map.values():
+                                    if v.endswith(os.path.splitext(new_name)[1]):
+                                        v = new_name
+                                        break
+                            new_list.append(section_map.get(v, v))
+                    kv[key] = new_list
+                elif isinstance(value, dict):
+                    if key.lower() == "drawindexed":
+                        continue
+                    val_str = value.get("value", "")
+                    kv[key] = section_map.get(val_str, val_str)
+                elif isinstance(value, str):
+                    # 임시문자열 치환
+                    if value.startswith("[__REPLACE_FILE_"):
+                        for _, new_name in temp_file_map.values():
+                            if value.endswith(os.path.splitext(new_name)[1]):
+                                value = new_name
+                                break
+                    kv[key] = section_map.get(value, value)
+
+        return new_config
 
         for section in config:
             if section not in section_map:

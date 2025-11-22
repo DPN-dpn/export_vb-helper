@@ -130,41 +130,55 @@ def parse_ini_with_duplicates(path):
     return ini_data
 
 
-def save_ini_with_duplicates(path, ini_data):
+def save_ini_with_duplicates(original_path, replacements, output_path=None):
+    """
+    원본 ini 파일을 문자열로 읽고, replacements dict에 있는 key-value만 찾아서 value를 교체하여 저장.
+    original_path: 원본 ini 파일 경로
+    replacements: {section: {key: value}} 형태의 dict
+    output_path: 저장할 파일 경로 (None이면 original_path에 덮어씀)
+    """
+    import re
+    import traceback
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            for section, pairs in ini_data.items():
-                f.write(f"[{section}]\n")
-                for key, val in pairs.items():
-                    if key.lower() == "drawindexed":
-                        seen = set()
+        with open(original_path, encoding="utf-8") as f:
+            ini_text = f.read()
 
-                        def write_drawindexed(item):
-                            v = item["value"] if isinstance(item, dict) else item
-                            if v in seen:
-                                return
-                            if isinstance(item, dict):
-                                for c in item.get("comments", []):
-                                    f.write(f"{c.lstrip()}\n")
-                            f.write(f"{key} = {v}\n")
-                            seen.add(v)
+        # 1차: 모든 교체 대상 값을 임시문자열로 치환
+        temp_map = {}  # {(section, key): temp_str}
+        for section, pairs in replacements.items():
+            section_pattern = re.compile(rf"^\[{re.escape(section)}\]$", re.MULTILINE)
+            section_match = section_pattern.search(ini_text)
+            if not section_match:
+                print(f"[save_ini_with_duplicates] 섹션 '{section}'을(를) 찾을 수 없습니다.")
+                continue
+            section_start = section_match.end()
+            next_section_match = re.search(r"^\[.*\]$", ini_text[section_start:], re.MULTILINE)
+            section_end = section_start + next_section_match.start() if next_section_match else len(ini_text)
+            section_body = ini_text[section_start:section_end]
 
-                        if isinstance(val, list):
-                            for item in val:
-                                write_drawindexed(item)
-                        else:
-                            write_drawindexed(val)
-                    else:
-                        if isinstance(val, list):
-                            for v in val:
-                                f.write(f"{key} = {v}\n")
-                        else:
-                            f.write(f"{key} = {val}\n")
-                f.write("\n")
+            for key, value in pairs.items():
+                temp_str = f"[__REPLACE_KEY_{section}_{key}__]"
+                temp_map[(section, key)] = (temp_str, value)
+                key_pattern = re.compile(rf"(^[ \t;#]*{re.escape(key)}[ \t]*=[ \t]*)(.*)$", re.MULTILINE)
+                def repl_temp(m):
+                    print(f"[save_ini_with_duplicates] '{section}' 섹션의 '{key}' 값을 임시문자열로 먼저 치환.")
+                    return m.group(1) + temp_str
+                section_body_new = key_pattern.sub(repl_temp, section_body)
+                if section_body == section_body_new:
+                    print(f"[save_ini_with_duplicates] '{section}' 섹션에 '{key}' 키를 찾지 못했습니다.")
+                section_body = section_body_new
+
+            ini_text = ini_text[:section_start] + section_body + ini_text[section_end:]
+
+        # 2차: 임시문자열을 실제 값으로 치환
+        for (section, key), (temp_str, value) in temp_map.items():
+            ini_text = ini_text.replace(temp_str, str(value))
+            print(f"[save_ini_with_duplicates] 임시문자열 {temp_str}을(를) 실제 값 '{value}'로 치환.")
+
+        save_path = output_path if output_path else original_path
+        with open(save_path, "w", encoding="utf-8") as f:
+            f.write(ini_text)
+        print(f"[save_ini_with_duplicates] 파일 저장 성공: {save_path}")
     except Exception as e:
-        tb = traceback.extract_tb(e.__traceback__)
-        last = tb[-1]
-        print(
-            f"[save_ini_with_duplicates] {type(e).__name__}: {e}\n  File: {last.filename}, line {last.lineno}, in {last.name}\n  Code: {last.line}"
-        )
-        raise
+        print(f"[save_ini_with_duplicates] 파일 저장 중 오류 발생: {e}")
+        traceback.print_exc()
