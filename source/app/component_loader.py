@@ -13,7 +13,7 @@ def load_components_from_hash(hash_path):
     components = []
     for entry in data:
         name = entry.get("component_name", "Unnamed")
-        shared = {k: entry.get(f"{k}_vb") for k in ["position", "texcoord", "blend"]}
+        shared = {k: entry.get(f"{k}_vb") for k in ["blend", "position", "texcoord"]}
 
         variants = {}
         for label in entry.get("object_classifications", [""]):

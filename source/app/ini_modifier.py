@@ -1,298 +1,241 @@
 import os
-import collections
-import traceback
-from shutil import copytree, rmtree, move
-from util.ini_parser import parse_ini_with_duplicates, save_ini_with_duplicates
+import shutil
+import re
+import uuid
 
 
-def collect_filename_mapping(components, logger=None):
-    mapping = {}
-    for comp in components:
-        name = comp["name"]
-        for key, var in comp["shared"].items():
-            v = var.get().strip()
-            if v:
-                mapping[v] = (name, "", key)
-        for variant_key, slots in comp["variants"].items():
-            for key, var in slots.items():
-                v = var.get().strip()
-                if v:
-                    mapping[v] = (name, variant_key, key)
-    if logger:
-        logger.log(f"[collect_filename_mapping] 매핑 결과: {mapping}")
-    return mapping
+def _copy_mod_folder(mod_folder_path, output_root, logger):
+    """1단계: 원본 모드파일을 output 폴더로 복사"""
+    logger.log("[1단계] 원본 모드파일을 output 폴더로 복사 중...")
+    if not os.path.exists(output_root):
+        os.makedirs(output_root)
+    
+    mod_folder_name = os.path.basename(os.path.normpath(mod_folder_path))
+    output_mod_path = os.path.join(output_root, mod_folder_name)
+    
+    if os.path.exists(output_mod_path):
+        shutil.rmtree(output_mod_path)
+    
+    shutil.copytree(mod_folder_path, output_mod_path)
+    logger.log(f"모드 폴더 복사 완료: {output_mod_path}")
+    
+    return output_mod_path
 
 
-def find_file(base_dir, filename):
-    # 루트에 꺼내진 파일 우선 확인
-    root_path = os.path.join(base_dir, os.path.basename(filename))
-    if os.path.exists(root_path):
-        return root_path
-    # 경로가 포함된 경우 직접 확인
-    direct_path = os.path.join(base_dir, filename)
-    if os.path.exists(direct_path):
-        return direct_path
-    # 파일명만으로 전체 탐색
-    fname = os.path.basename(filename)
-    for root, _, files in os.walk(base_dir):
-        if fname in files:
-            return os.path.join(root, fname)
-    return None
+def _collect_matched_pairs(asset_folder_path, component_slot_panel, logger):
+    """2단계: 매칭된 파일 수집"""
+    logger.log("[2단계] 매칭된 파일 수집 중...")
+    component_values = component_slot_panel.get_component_values()
+    components = component_slot_panel.controller.matcher.components
+    
+    asset_name = os.path.basename(os.path.normpath(asset_folder_path))
+    matched_pairs = []
+    
+    for comp_idx, comp_widget in enumerate(component_values):
+        comp = components[comp_idx]
+        comp_name = comp["name"]
+        
+        # shared 슬롯 처리
+        for key, var in comp_widget.get("shared", {}).items():
+            value = var.get()
+            if value:
+                slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}{key.capitalize()}"
+                matched_pairs.append((slot_name, value))
+        
+        # variant 슬롯 처리
+        for variant_name, variant_widgets in comp_widget.get("variants", {}).items():
+            for key, var in variant_widgets.items():
+                value = var.get()
+                if value:
+                    if key.lower() == "ib":
+                        if variant_name:
+                            slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}{variant_name.capitalize()}"
+                        else:
+                            slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}"
+                    else:
+                        if variant_name:
+                            slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}{variant_name.capitalize()}{key.capitalize()}"
+                        else:
+                            slot_name = f"{asset_name.capitalize()}{comp_name.capitalize()}{key.capitalize()}"
+                    matched_pairs.append((slot_name, value))
+    
+    logger.log(f"매칭된 파일 수: {len(matched_pairs)}개")
+    return matched_pairs
 
 
-def extract_files_to_root(mod_folder_path, filename_map, logger=None):
-    """
-    매칭된 파일들과 ini 파일을 모드폴더 루트로 복사
-    """
-    root_dir = mod_folder_path
-    extracted = set()
-    # 매칭된 파일들 꺼내기
-    for base in filename_map.keys():
-        src_path = find_file(mod_folder_path, base)
-        if src_path:
-            dst_path = os.path.join(root_dir, os.path.basename(base))
-            if src_path != dst_path:
-                try:
-                    if os.path.exists(dst_path):
-                        os.remove(dst_path)
-                    move(src_path, dst_path)
-                    extracted.add(dst_path)
-                    if logger:
-                        logger.log(
-                            f"[extract_files_to_root] 파일 이동: {src_path} -> {dst_path}"
-                        )
-                except Exception as e:
-                    if logger:
-                        logger.log(
-                            f"[extract_files_to_root] 파일 이동 실패: {src_path} -> {dst_path}, {e}"
-                        )
-    # ini 파일 꺼내기
-    for root, _, files in os.walk(mod_folder_path):
+def _move_files_to_top(output_mod_path, matched_pairs, logger):
+    """2-1단계: 매칭된 파일들과 ini 파일들을 최상위 폴더로 이동"""
+    logger.log("[2-1단계] 매칭된 파일과 ini 파일을 최상위 폴더로 이동 중...")
+    
+    # ini 파일 찾기
+    ini_files = []
+    for root, dirs, files in os.walk(output_mod_path):
         for file in files:
-            if file.lower().endswith(".ini"):
-                src_path = os.path.join(root, file)
-                dst_path = os.path.join(root_dir, file)
-                if src_path != dst_path:
-                    try:
-                        if os.path.exists(dst_path):
-                            os.remove(dst_path)
-                        move(src_path, dst_path)
-                        extracted.add(dst_path)
-                        if logger:
-                            logger.log(
-                                f"[extract_files_to_root] INI 이동: {src_path} -> {dst_path}"
-                            )
-                    except Exception as e:
-                        if logger:
-                            logger.log(
-                                f"[extract_files_to_root] INI 이동 실패: {src_path} -> {dst_path}, {e}"
-                            )
-    return list(extracted)
+            if file.lower().endswith('.ini'):
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, output_mod_path)
+                ini_files.append(rel_path)
+    
+    # 원본 경로 저장
+    original_paths = [matched_file for _, matched_file in matched_pairs]
+    
+    # 매칭된 파일 이동
+    for idx, (slot_name, matched_file) in enumerate(matched_pairs):
+        src_path = os.path.join(output_mod_path, matched_file)
+        if os.path.exists(src_path) and ('/' in matched_file or '\\' in matched_file):
+            filename = os.path.basename(matched_file)
+            dst_path = os.path.join(output_mod_path, filename)
+            
+            counter = 1
+            base_name, ext = os.path.splitext(filename)
+            while os.path.exists(dst_path):
+                filename = f"{base_name}_{counter}{ext}"
+                dst_path = os.path.join(output_mod_path, filename)
+                counter += 1
+            
+            shutil.move(src_path, dst_path)
+            matched_pairs[idx] = (slot_name, filename)
+            logger.log(f"이동: {matched_file} -> {filename}")
+        else:
+            moved_filename = os.path.basename(matched_file)
+            matched_pairs[idx] = (slot_name, moved_filename)
+    
+    # ini 파일 이동
+    for idx, ini_file in enumerate(ini_files):
+        src_path = os.path.join(output_mod_path, ini_file)
+        if '/' in ini_file or '\\' in ini_file:
+            filename = os.path.basename(ini_file)
+            dst_path = os.path.join(output_mod_path, filename)
+            
+            counter = 1
+            base_name, ext = os.path.splitext(filename)
+            while os.path.exists(dst_path):
+                filename = f"{base_name}_{counter}{ext}"
+                dst_path = os.path.join(output_mod_path, filename)
+                counter += 1
+            
+            shutil.move(src_path, dst_path)
+            ini_files[idx] = filename
+            logger.log(f"이동: {ini_file} -> {filename}")
+        else:
+            ini_files[idx] = ini_file
+    
+    return matched_pairs, ini_files, original_paths
 
 
-def rename_sections_and_files(
-    ini_path, asset_name, filename_to_info, mod_folder_path, logger=None
-):
-    try:
-
-        def format_kind(kind):
-            return "IB" if kind.lower() == "ib" else kind.capitalize()
-
-        config = parse_ini_with_duplicates(ini_path)
-        new_config = collections.OrderedDict()
-        section_map = {}
-        temp_file_map = {}  # {old_path: temp_path}
-        temp_filename_map = {}  # {old_filename: temp_filename}
-
-        # 1차: 파일명/경로를 임시문자열로 먼저 치환
-        for base, (comp_name, variant_key, kind) in filename_to_info.items():
-            for section in config:
-                if section.startswith("Resource"):
-                    filename = config[section].get("filename", "")
-                    if isinstance(filename, list):
-                        filename = filename[0]
-                    if os.path.basename(filename) == os.path.basename(base):
-                        kind_str = format_kind(kind)
-                        new_section = (
-                            f"Resource{asset_name}{comp_name}{variant_key}{kind_str}"
-                        )
-                        section_map[section] = new_section
-
-                        ext = os.path.splitext(base)[1]
-                        new_name = (
-                            f"{asset_name}{comp_name}{variant_key}{ext}"
-                            if kind_str == "IB"
-                            else f"{asset_name}{comp_name}{kind_str}{ext}"
-                        )
-
-                        old_path = find_file(mod_folder_path, base)
-                        if logger:
-                            logger.log(
-                                f"[rename_sections_and_files] 섹션: {section}, 기존 파일: {filename}, 매핑키: {base}, old_path: {old_path}"
-                            )
-                        if not old_path:
-                            if logger:
-                                logger.log(
-                                    f"[rename_sections_and_files] 파일을 찾을 수 없음: {base}"
-                                )
-                            continue
-                        rel = os.path.relpath(old_path, mod_folder_path)
-                        temp_path = os.path.join(
-                            mod_folder_path, os.path.dirname(rel), f"[__REPLACE_FILE_{asset_name}_{comp_name}_{variant_key}_{kind_str}__]{ext}"
-                        )
-                        temp_file_map[old_path] = (temp_path, new_name)
-                        temp_filename_map[filename] = f"[__REPLACE_FILE_{asset_name}_{comp_name}_{variant_key}_{kind_str}__]{ext}"
-                        os.makedirs(os.path.dirname(temp_path), exist_ok=True)
-                        move(old_path, temp_path)
-                        if logger:
-                            logger.log(
-                                f"[rename_sections_and_files] 파일 임시 이동: {old_path} -> {temp_path}"
-                            )
-
-                        new_data = collections.OrderedDict()
-                        for k, v in config[section].items():
-                            if k.lower() == "drawindexed":
-                                new_data[k] = v
-                            else:
-                                if isinstance(v, dict):
-                                    new_data[k] = v.get("value", "")
-                                elif (
-                                    isinstance(v, list) and v and isinstance(v[0], dict)
-                                ):
-                                    new_data[k] = [item.get("value", "") for item in v]
-                                else:
-                                    new_data[k] = v
-                        new_data["filename"] = temp_filename_map[filename]
-                        if logger:
-                            logger.log(
-                                f"[rename_sections_and_files] 섹션명 변경: {section} -> {new_section}, 파일명 임시 변경: {filename} -> {new_data['filename']}"
-                            )
-                        new_config[new_section] = new_data
-                        break
-
-        # 기존 방식대로 나머지 섹션 처리
-        for section in config:
-            if section not in section_map:
-                new_data = collections.OrderedDict()
-                for k, v in config[section].items():
-                    if k.lower() == "drawindexed":
-                        new_data[k] = v
-                    else:
-                        if isinstance(v, dict):
-                            new_data[k] = v.get("value", "")
-                        elif isinstance(v, list) and v and isinstance(v[0], dict):
-                            new_data[k] = [item.get("value", "") for item in v]
-                        else:
-                            new_data[k] = v
-                new_config[section] = new_data
-
-        # 2차: 임시문자열을 실제 파일명/경로로 치환
-        for temp_path, new_name in temp_file_map.values():
-            final_path = os.path.join(os.path.dirname(temp_path), new_name)
-            move(temp_path, final_path)
-            if logger:
-                logger.log(f"[rename_sections_and_files] 파일 최종 이동: {temp_path} -> {final_path}")
-
-        for section, kv in new_config.items():
-            for key, value in kv.items():
-                if isinstance(value, list):
-                    if key.lower() == "drawindexed":
-                        continue
-                    new_list = []
-                    for v in value:
-                        if isinstance(v, dict):
-                            val_str = v.get("value", "")
-                            new_list.append(section_map.get(val_str, val_str))
-                        else:
-                            # 임시문자열 치환
-                            if isinstance(v, str) and v.startswith("[__REPLACE_FILE_"):
-                                # 임시문자열을 실제 파일명으로 치환
-                                for _, new_name in temp_file_map.values():
-                                    if v.endswith(os.path.splitext(new_name)[1]):
-                                        v = new_name
-                                        break
-                            new_list.append(section_map.get(v, v))
-                    kv[key] = new_list
-                elif isinstance(value, dict):
-                    if key.lower() == "drawindexed":
-                        continue
-                    val_str = value.get("value", "")
-                    kv[key] = section_map.get(val_str, val_str)
-                elif isinstance(value, str):
-                    # 임시문자열 치환
-                    if value.startswith("[__REPLACE_FILE_"):
-                        for _, new_name in temp_file_map.values():
-                            if value.endswith(os.path.splitext(new_name)[1]):
-                                value = new_name
-                                break
-                    kv[key] = section_map.get(value, value)
-
-        return new_config
-
-        for section in config:
-            if section not in section_map:
-                # drawindexed 외에는 dict/list(dict) 구조가 오면 value만 추출
-                new_data = collections.OrderedDict()
-                for k, v in config[section].items():
-                    if k.lower() == "drawindexed":
-                        new_data[k] = v
-                    else:
-                        if isinstance(v, dict):
-                            new_data[k] = v.get("value", "")
-                        elif isinstance(v, list) and v and isinstance(v[0], dict):
-                            new_data[k] = [item.get("value", "") for item in v]
-                        else:
-                            new_data[k] = v
-                new_config[section] = new_data
-
-        for section, kv in new_config.items():
-            for key, value in kv.items():
-                if isinstance(value, list):
-                    if key.lower() == "drawindexed":
-                        # drawindexed는 dict 구조 허용
-                        continue
-                    new_list = []
-                    for v in value:
-                        if isinstance(v, dict):
-                            val_str = v.get("value", "")
-                            new_list.append(section_map.get(val_str, val_str))
-                        else:
-                            new_list.append(section_map.get(v, v))
-                    kv[key] = new_list
-                elif isinstance(value, dict):
-                    if key.lower() == "drawindexed":
-                        continue
-                    val_str = value.get("value", "")
-                    kv[key] = section_map.get(val_str, val_str)
-                elif isinstance(value, str):
-                    kv[key] = section_map.get(value, value)
-
-        return new_config
-    except Exception as e:
-        tb = traceback.extract_tb(e.__traceback__)
-        last = tb[-1]
-        if logger:
-            logger.log(
-                f"[rename_sections_and_files] {type(e).__name__}: {e}\n  File: {last.filename}, line {last.lineno}, in {last.name}\n  Code: {last.line}"
-            )
-        raise
+def _update_ini_file_paths(output_mod_path, ini_files, matched_pairs, original_paths, logger):
+    """2-2단계: ini 파일의 filename = 경로 수정"""
+    logger.log("[2-2단계] ini 파일의 경로 수정 중...")
+    
+    for new_ini_filename in ini_files:
+        ini_path = os.path.join(output_mod_path, new_ini_filename)
+        
+        with open(ini_path, 'r', encoding='utf-8', errors='ignore') as f:
+            ini_content = f.read()
+        
+        for idx, original_path in enumerate(original_paths):
+            new_filename = matched_pairs[idx][1]
+            
+            patterns = [
+                original_path,
+                original_path.replace('/', '\\'),
+                original_path.replace('\\', '/'),
+            ]
+            
+            for pattern in patterns:
+                ini_content = re.sub(
+                    rf'(filename\s*=\s*)({re.escape(pattern)})',
+                    rf'\1{new_filename}',
+                    ini_content,
+                    flags=re.IGNORECASE
+                )
+        
+        with open(ini_path, 'w', encoding='utf-8') as f:
+            f.write(ini_content)
+        
+        logger.log(f"ini 파일 경로 수정 완료: {new_ini_filename}")
 
 
-def export_modified_mod(mod_folder_path, output_root, logger=None):
-    name = os.path.basename(mod_folder_path.rstrip("/\\"))
-    output_path = os.path.join(output_root, name)
-    if logger:
-        logger.log(
-            f"[export_modified_mod] {mod_folder_path} -> {output_path} 복사 시작"
-        )
-    if os.path.exists(output_path):
-        if logger:
-            logger.log(f"[export_modified_mod] 기존 폴더 삭제: {output_path}")
-        rmtree(output_path)
-    copytree(mod_folder_path, output_path)
-    if logger:
-        logger.log(f"[export_modified_mod] 복사 완료: {output_path}")
-    return output_path
+def _rename_to_temp_files(output_mod_path, matched_pairs, logger):
+    """3-1단계: 매칭할 파일명을 임시 문자열로 변경"""
+    logger.log("[3-1단계] 파일명을 임시 문자열로 변경 중...")
+    
+    # ini 수정을 위해 이동 후 파일명 저장
+    moved_filenames = [moved_filename for _, moved_filename in matched_pairs]
+    
+    for idx, (slot_name, moved_filename) in enumerate(matched_pairs):
+        old_path = os.path.join(output_mod_path, moved_filename)
+        if os.path.exists(old_path):
+            temp_filename = f"TEMP_{uuid.uuid4().hex}{os.path.splitext(moved_filename)[1]}"
+            temp_path = os.path.join(output_mod_path, temp_filename)
+            
+            os.rename(old_path, temp_path)
+            # matched_pairs 업데이트
+            matched_pairs[idx] = (slot_name, temp_filename)
+            logger.log(f"임시 변경: {moved_filename} -> {temp_filename}")
+    
+    return matched_pairs, moved_filenames
+
+
+def _rename_to_final_files(output_mod_path, matched_pairs, logger):
+    """3-2단계: 임시 문자열을 최종 매칭된 파일명으로 변경"""
+    logger.log("[3-2단계] 임시 파일명을 최종 파일명으로 변경 중...")
+    
+    for idx, (slot_name, temp_filename) in enumerate(matched_pairs):
+        ext = os.path.splitext(temp_filename)[1]
+        final_filename = f"{slot_name}{ext}"
+        
+        temp_path = os.path.join(output_mod_path, temp_filename)
+        final_path = os.path.join(output_mod_path, final_filename)
+        
+        counter = 1
+        base_name, ext = os.path.splitext(final_filename)
+        while os.path.exists(final_path):
+            final_filename = f"{base_name}_{counter}{ext}"
+            final_path = os.path.join(output_mod_path, final_filename)
+            counter += 1
+        
+        os.rename(temp_path, final_path)
+        # matched_pairs 업데이트
+        matched_pairs[idx] = (slot_name, final_filename)
+        logger.log(f"최종 변경: {temp_filename} -> {final_filename}")
+    
+    return matched_pairs
+
+
+def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_filenames, logger):
+    """4단계: ini 파일 내용 변경"""
+    logger.log("[4단계] ini 파일 내용 변경 중...")
+    
+    for new_ini_filename in ini_files:
+        ini_path = os.path.join(output_mod_path, new_ini_filename)
+        
+        logger.log(f"  처리 중: {new_ini_filename}")
+        with open(ini_path, 'r', encoding='utf-8', errors='ignore') as f:
+            ini_content = f.read()
+        
+        # 4-1단계: 이동 후 파일명 -> 임시 문자열로 교체
+        temp_strings = {}
+        for idx, (slot_name, final_filename) in enumerate(matched_pairs):
+            moved_filename = moved_filenames[idx]
+            moved_name_no_ext = os.path.splitext(moved_filename)[0]
+            final_name_no_ext = os.path.splitext(final_filename)[0]
+            
+            temp_str = f"TEMP_INI_{uuid.uuid4().hex}"
+            temp_strings[temp_str] = final_name_no_ext
+            
+            logger.log(f"    임시 교체: {moved_name_no_ext} -> {temp_str}")
+            ini_content = ini_content.replace(moved_name_no_ext, temp_str)
+        
+        # 4-2단계: 임시 문자열 -> 최종 파일명으로 교체
+        for temp_str, final_name_no_ext in temp_strings.items():
+            logger.log(f"    최종 교체: {temp_str} -> {final_name_no_ext}")
+            ini_content = ini_content.replace(temp_str, final_name_no_ext)
+        
+        with open(ini_path, 'w', encoding='utf-8') as f:
+            f.write(ini_content)
+        
+        logger.log(f"  완료: {new_ini_filename}")
 
 
 def generate_ini(
@@ -302,43 +245,51 @@ def generate_ini(
     output_root="output",
     logger=None,
 ):
-    components = component_slot_panel.get_component_values()
-    asset_name = os.path.basename(os.path.normpath(asset_folder_path))
-    filename_map = collect_filename_mapping(components, logger)
-
-    output_mod_path = export_modified_mod(mod_folder_path, output_root, logger)
-
-    # 매칭된 파일들과 ini를 루트로 꺼내기
-    extract_files_to_root(output_mod_path, filename_map, logger)
-
-    ini_files = []
-    if logger:
-        logger.log(f"[generate_ini] INI 파일 탐색: {output_mod_path}")
-    for root, _, files in os.walk(output_mod_path):
-        for file in files:
-            if file.lower().endswith(".ini"):
-                ini_path = os.path.join(root, file)
-                # 루트에 있는 ini만 추가
-                if os.path.dirname(ini_path) == output_mod_path:
-                    ini_files.append(ini_path)
-                    if logger:
-                        logger.log(f"[generate_ini] INI 파일 발견: {ini_path}")
-
-    if not ini_files:
-        if logger:
-            logger.log("[generate_ini] output 폴더 루트에 ini 파일이 없습니다.")
-        raise FileNotFoundError("output 폴더 루트에 ini 파일이 없습니다.")
-
-    for ini_path in ini_files:
-        if logger:
-            logger.log(f"[generate_ini] 섹션/파일명 변경 시작: {ini_path}")
-        modified = rename_sections_and_files(
-            ini_path, asset_name, filename_map, output_mod_path, logger
-        )
-        save_ini_with_duplicates(ini_path, modified)
-        if logger:
-            logger.log(f"[generate_ini] 섹션/파일명 변경 완료: {ini_path}")
-
-    if logger:
-        logger.log(f"[generate_ini] 모든 작업 완료: {output_mod_path}")
+    """
+    모드 파일과 매칭 정보를 바탕으로 최종 ini 파일을 생성합니다.
+    
+    단계:
+    1. 원본 모드파일을 output폴더로 전부 복사
+    2. 매칭된 파일 수집하기
+    2-1. 복사한 모드폴더에서 매칭된 파일들과 ini파일들이 모드 내 폴더 경로에 있을 때 최상폴더로 꺼냄
+    2-2. ini의 filename = 에서 변경된 경로로 수정
+    3. 파일명 변경
+    3-1. 매칭할 파일명들을 임시 문자열로 변경
+    3-2. 임시 문자열들을 제대로 매칭된 파일명으로 변경
+    4. ini 변경
+    4-1. 매칭한 문자열을 임시 문자열로 변경
+    4-2. 임시 문자열을 매칭된 문자열로 변경
+    5. 완료
+    """
+    
+    # 1단계: 원본 모드파일을 output 폴더로 복사
+    output_mod_path = _copy_mod_folder(mod_folder_path, output_root, logger)
+    
+    # 2단계: 매칭된 파일 수집
+    matched_pairs = _collect_matched_pairs(asset_folder_path, component_slot_panel, logger)
+    
+    # 2-1단계: 파일들을 최상위 폴더로 이동
+    matched_pairs, ini_files, original_paths = _move_files_to_top(output_mod_path, matched_pairs, logger)
+    
+    # 2-2단계: ini 파일의 filename = 경로 수정
+    _update_ini_file_paths(output_mod_path, ini_files, matched_pairs, original_paths, logger)
+    
+    # 3단계: 파일명 변경
+    logger.log("[3단계] 파일명 변경 중...")
+    
+    # 3-1단계: 임시 파일명으로 변경
+    matched_pairs, moved_filenames = _rename_to_temp_files(output_mod_path, matched_pairs, logger)
+    
+    # 3-2단계: 최종 파일명으로 변경
+    matched_pairs = _rename_to_final_files(output_mod_path, matched_pairs, logger)
+    
+    # 4단계: ini 파일 내용 변경
+    logger.log("[4단계] ini 파일 내용 변경 중...")
+    _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_filenames, logger)
+    
+    # 5단계: 완료
+    logger.log("[5단계] 완료!")
+    logger.log(f"출력 경로: {output_mod_path}")
+    logger.log(f"처리된 파일 수: {len(matched_pairs)}개")
+    
     return output_mod_path

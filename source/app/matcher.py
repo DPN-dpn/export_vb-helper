@@ -49,9 +49,9 @@ class ComponentMatcherApp:
                     texture_sets = [texture_sets[0] if texture_sets else []]
 
                 shared = {
+                    "blend": entry.get("blend_vb"),
                     "position": entry.get("position_vb"),
                     "texcoord": entry.get("texcoord_vb"),
-                    "blend": entry.get("blend_vb"),
                 }
 
                 variants = {}
