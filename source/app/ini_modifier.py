@@ -241,6 +241,10 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
         # 4-3-2단계: Resource로 시작하는데 filename=이 없는 섹션 삭제 및 참조 제거 (copy vb 대응)
         ini_content = _remove_resource_sections_without_filename(ini_content, logger)
         
+        # 4-4단계: != 조건문을 (A > B || A < B) 형태로 교체
+        logger.log(f"  4-4단계: != 조건문 교체 중...")
+        ini_content = _replace_not_equal_conditions(ini_content, logger)
+        
         with open(ini_path, 'w', encoding='utf-8') as f:
             f.write(ini_content)
         
@@ -264,6 +268,29 @@ def _remove_resource_cs_sections(ini_content, logger):
     for section_name in sections_to_remove:
         pattern = rf'\[{re.escape(section_name)}\].*?(?=\n\[|\Z)'
         ini_content = re.sub(pattern, '', ini_content, flags=re.DOTALL)
+    
+    return ini_content
+
+
+def _replace_not_equal_conditions(ini_content, logger):
+    """4-4단계: != 조건문을 (A > B || A < B) 형태로 교체"""
+    # A != B 패턴 찾기 (양쪽에 공백이 있을 수 있음)
+    # 패턴: 단어/숫자/변수 != 단어/숫자/변수
+    pattern = r'(\S+)\s*!=\s*(\S+)'
+    
+    def replace_func(match):
+        left = match.group(1)
+        right = match.group(2)
+        replacement = f"({left} > {right} || {left} < {right})"
+        logger.log(f"    교체: {match.group(0)} -> {replacement}")
+        return replacement
+    
+    original_content = ini_content
+    ini_content = re.sub(pattern, replace_func, ini_content)
+    
+    replaced_count = len(re.findall(pattern, original_content))
+    if replaced_count > 0:
+        logger.log(f"    != 조건문 {replaced_count}개 교체 완료")
     
     return ini_content
 
