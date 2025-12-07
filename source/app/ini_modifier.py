@@ -143,12 +143,11 @@ def _update_ini_file_paths(output_mod_path, ini_files, matched_pairs, original_p
             ]
             
             for pattern in patterns:
-                ini_content = re.sub(
-                    rf'(filename\s*=\s*)({re.escape(pattern)})',
-                    rf'\1{new_filename}',
-                    ini_content,
-                    flags=re.IGNORECASE
-                )
+                # replacement 문자열에서 '\1'과 파일명 바로 뒤에 숫자가 올 경우
+                # '\18' 같은 잘못된 그룹 참조로 해석되는 문제가 있어,
+                # 서브 함수로 처리하여 그룹을 안전하게 결합한다.
+                pat = re.compile(r'(filename\s*=\s*)(%s)' % re.escape(pattern), flags=re.IGNORECASE)
+                ini_content = pat.sub(lambda m, nf=new_filename: m.group(1) + nf, ini_content)
         
         with open(ini_path, 'w', encoding='utf-8') as f:
             f.write(ini_content)
