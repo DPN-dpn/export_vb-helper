@@ -231,8 +231,8 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
             logger.log(f"    최종 교체: {temp_str} -> {final_name_no_ext}")
             ini_content = ini_content.replace(temp_str, final_name_no_ext)
         
-        # 4-3단계: 특정 구문 스킵
-        logger.log(f"  4-3단계: 특정 구문 처리 중...")
+        # 4-3단계: 특정 구문 삭제
+        logger.log(f"  4-3단계: 특정 구문 삭제 중...")
         
         # 4-3-1단계: Resource로 시작하고 CS로 끝나는 섹션 삭제 (붕스 대응)
         ini_content = _remove_resource_cs_sections(ini_content, logger)
@@ -240,8 +240,13 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
         # 4-3-2단계: Resource로 시작하는데 filename=이 없는 섹션 삭제 및 참조 제거 (copy vb 대응)
         ini_content = _remove_resource_sections_without_filename(ini_content, logger)
         
-        # 4-4단계: != 조건문을 (A > B || A < B) 형태로 교체
-        logger.log(f"  4-4단계: != 조건문 교체 중...")
+        # 4-3-3단계: Resource로 시작하고 format=이 있지만 filename 확장자가 .ib가 아닌 섹션 삭제 및 참조 제거
+        ini_content = _remove_resource_sections_fake_ib_file(ini_content, logger)
+        
+        # 4-4단계: 특정 구문 처리
+        logger.log(f"  4-3단계: 특정 구문 처리 중...")
+        
+        # 4-4-1단계: != 조건문을 (A > B || A < B) 형태로 교체
         ini_content = _replace_not_equal_conditions(ini_content, logger)
         
         with open(ini_path, 'w', encoding='utf-8') as f:
@@ -357,6 +362,93 @@ def _remove_resource_sections_without_filename(ini_content, logger):
     return ini_content
 
 
+def _remove_resource_sections_fake_ib_file(ini_content, logger):
+    """4-3-3단계: Resource로 시작하고 format=이 있지만 filename=의 확장자가 .ib가 아닌 섹션 삭제"""
+    lines = ini_content.split('\n')
+    to_remove_ranges = []  # list of (start_idx, end_idx)
+    sections_to_remove = []
+
+    i = 0
+    while i < len(lines):
+        line_stripped = lines[i].strip()
+        if line_stripped.startswith('[') and line_stripped.endswith(']'):
+            section_name = line_stripped[1:-1].strip()
+            if section_name.startswith('Resource'):
+                # find next section start
+                j = i + 1
+                has_format = False
+                filename_value = None
+
+                while j < len(lines):
+                    next_line = lines[j].strip()
+                    if next_line.startswith('[') and next_line.endswith(']'):
+                        break
+
+                    # check format=
+                    if re.match(r'(?i)format\s*=\s*', next_line):
+                        has_format = True
+
+                    # check filename=
+                    m = re.match(r'(?i)filename\s*=\s*(.*)', next_line)
+                    if m:
+                        val = m.group(1).strip()
+                        # remove surrounding quotes if any
+                        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                            val = val[1:-1]
+                        filename_value = val
+                        # keep scanning to get format presence too
+
+                    j += 1
+
+                # if format exists and filename present but ext != .ib -> remove
+                if has_format and filename_value:
+                    _, ext = os.path.splitext(filename_value)
+                    if ext.lower() != '.ib':
+                        to_remove_ranges.append((i, j))
+                        sections_to_remove.append(section_name)
+                        logger.log(f"    format 있으나 .ib 아님으로 삭제 대상: {section_name} (filename={filename_value})")
+
+                i = j
+                continue
+
+        i += 1
+
+    if not to_remove_ranges:
+        return ini_content
+
+    # remove section ranges
+    remove_idx = set()
+    for start, end in to_remove_ranges:
+        for k in range(start, end):
+            remove_idx.add(k)
+
+    filtered_lines = [ln for idx, ln in enumerate(lines) if idx not in remove_idx]
+
+    ini_content = '\n'.join(filtered_lines)
+
+    # 참조 제거 (해당 섹션 이름을 포함하는 줄 삭제, 섹션 헤더는 이미 제거됨)
+    if sections_to_remove:
+        lines = ini_content.split('\n')
+        final_lines = []
+        for line in lines:
+            line_stripped = line.strip()
+            # 섹션 헤더가 아니고, 섹션 이름을 포함하면 제거
+            if not (line_stripped.startswith('[') and line_stripped.endswith(']')):
+                skip = False
+                for sec in sections_to_remove:
+                    if sec in line:
+                        logger.log(f"    참조 제거: {line_stripped}")
+                        skip = True
+                        break
+                if skip:
+                    continue
+            final_lines.append(line)
+
+        ini_content = '\n'.join(final_lines)
+
+    return ini_content
+
+
 def generate_ini(
     asset_folder_path,
     mod_folder_path,
@@ -378,6 +470,8 @@ def generate_ini(
     4. ini 변경
     4-1. 매칭한 문자열을 임시 문자열로 변경
     4-2. 임시 문자열을 매칭된 문자열로 변경
+    4-3. 특정 구문 삭제
+    4-4. 특정 구문 처리
     5. 완료
     """
     
