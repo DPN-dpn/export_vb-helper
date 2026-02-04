@@ -5,7 +5,7 @@ from app.matcher import ComponentMatcherApp
 
 def main():
     root = tk.Tk()
-    root.title("엵툵 컴포넌트 매칭기")
+    root.title("엵툵 사전작업 도우미")
     root.geometry("1000x700")
 
     ui = MainLayout(root)

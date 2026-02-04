@@ -30,6 +30,7 @@ def _collect_matched_pairs(asset_folder_path, component_slot_panel, logger):
     
     asset_name = os.path.basename(os.path.normpath(asset_folder_path))
     matched_pairs = []
+    ib_slots = set()
     
     for comp_idx, comp_widget in enumerate(component_values):
         comp = components[comp_idx]
@@ -52,6 +53,8 @@ def _collect_matched_pairs(asset_folder_path, component_slot_panel, logger):
                             slot_name = f"{asset_name}{comp_name}{variant_name}"
                         else:
                             slot_name = f"{asset_name}{comp_name}"
+                        # IB 슬롯으로 표시
+                        ib_slots.add(slot_name)
                     else:
                         if variant_name:
                             slot_name = f"{asset_name}{comp_name}{variant_name}{key}"
@@ -60,71 +63,106 @@ def _collect_matched_pairs(asset_folder_path, component_slot_panel, logger):
                     matched_pairs.append((slot_name, value))
     
     logger.log(f"매칭된 파일 수: {len(matched_pairs)}개")
-    return matched_pairs
+    return matched_pairs, ib_slots
 
 
-def _move_files_to_top(output_mod_path, matched_pairs, logger):
-    """2-1단계: 매칭된 파일들과 ini 파일들을 최상위 폴더로 이동"""
+def _move_files_to_top(output_mod_path, matched_pairs, ib_slots, logger):
+    """2-1단계: 매칭된 파일들과 ini 파일들을 최상위 폴더로 이동
+    (단순화된 구현)
+    - ini 파일 목록 수집
+    - 각 매칭 파일을 처리: 서브폴더에서 이동하거나 최상위에서 확장자(.ib) 변경
+    """
     logger.log("[2-1단계] 매칭된 파일과 ini 파일을 최상위 폴더로 이동 중...")
-    
-    # ini 파일 찾기
-    ini_files = []
-    for root, dirs, files in os.walk(output_mod_path):
-        for file in files:
-            if file.lower().endswith('.ini'):
-                full_path = os.path.join(root, file)
-                rel_path = os.path.relpath(full_path, output_mod_path)
-                ini_files.append(rel_path)
-    
+
+    def _collect_ini_files(root_path):
+        files = []
+        for r, d, fs in os.walk(root_path):
+            for f in fs:
+                if f.lower().endswith('.ini'):
+                    full = os.path.join(r, f)
+                    files.append(os.path.relpath(full, root_path))
+        return files
+
+    def _generate_unique_name(root_path, base, ext):
+        name = f"{base}{ext}"
+        dst = os.path.join(root_path, name)
+        counter = 1
+        while os.path.exists(dst):
+            name = f"{base}_{counter}{ext}"
+            dst = os.path.join(root_path, name)
+            counter += 1
+        return name
+
+    def _process_matched_file(root_path, slot_name, matched_file):
+        src = os.path.join(root_path, matched_file)
+
+        # 경우1: 서브폴더에 있던 파일을 최상위로 이동
+        if os.path.exists(src) and ('/' in matched_file or '\\' in matched_file):
+            orig = os.path.basename(matched_file)
+            base, ext = os.path.splitext(orig)
+            desired_ext = '.ib' if slot_name in ib_slots else ext
+            filename = _generate_unique_name(root_path, base, desired_ext)
+            dst = os.path.join(root_path, filename)
+            shutil.move(src, dst)
+            if slot_name in ib_slots and ext.lower() != '.ib':
+                logger.log(f"이동 및 확장자 변경(IB): {matched_file} -> {filename}")
+            else:
+                logger.log(f"이동: {matched_file} -> {filename}")
+            return filename
+
+        # 경우2: 이미 최상위에 있는 파일
+        moved = os.path.basename(matched_file)
+        base, ext = os.path.splitext(moved)
+        if slot_name in ib_slots and ext.lower() != '.ib':
+            filename = _generate_unique_name(root_path, base, '.ib')
+            src_top = os.path.join(root_path, moved)
+            if os.path.exists(src_top):
+                os.rename(src_top, os.path.join(root_path, filename))
+                logger.log(f"확장자 변경(IB): {moved} -> {filename}")
+                return filename
+            else:
+                return moved
+        return moved
+
+    # ini 파일 목록
+    ini_files = _collect_ini_files(output_mod_path)
+
     # 원본 경로 저장
     original_paths = [matched_file for _, matched_file in matched_pairs]
-    
-    # 매칭된 파일 이동
+
+    # 매칭된 파일 처리
     for idx, (slot_name, matched_file) in enumerate(matched_pairs):
-        src_path = os.path.join(output_mod_path, matched_file)
-        if os.path.exists(src_path) and ('/' in matched_file or '\\' in matched_file):
-            filename = os.path.basename(matched_file)
-            dst_path = os.path.join(output_mod_path, filename)
-            
-            counter = 1
-            base_name, ext = os.path.splitext(filename)
-            while os.path.exists(dst_path):
-                filename = f"{base_name}_{counter}{ext}"
-                dst_path = os.path.join(output_mod_path, filename)
-                counter += 1
-            
-            shutil.move(src_path, dst_path)
-            matched_pairs[idx] = (slot_name, filename)
-            logger.log(f"이동: {matched_file} -> {filename}")
-        else:
-            moved_filename = os.path.basename(matched_file)
-            matched_pairs[idx] = (slot_name, moved_filename)
-    
-    # ini 파일 이동
+        new_name = _process_matched_file(output_mod_path, slot_name, matched_file)
+        matched_pairs[idx] = (slot_name, new_name)
+
+    # ini 파일 이동 (기존 동작 유지)
     for idx, ini_file in enumerate(ini_files):
         src_path = os.path.join(output_mod_path, ini_file)
         if '/' in ini_file or '\\' in ini_file:
             filename = os.path.basename(ini_file)
             dst_path = os.path.join(output_mod_path, filename)
-            
+
             counter = 1
             base_name, ext = os.path.splitext(filename)
             while os.path.exists(dst_path):
                 filename = f"{base_name}_{counter}{ext}"
                 dst_path = os.path.join(output_mod_path, filename)
                 counter += 1
-            
+
             shutil.move(src_path, dst_path)
             ini_files[idx] = filename
             logger.log(f"이동: {ini_file} -> {filename}")
         else:
             ini_files[idx] = ini_file
-    
+
     return matched_pairs, ini_files, original_paths
 
 
 def _update_ini_file_paths(output_mod_path, ini_files, matched_pairs, original_paths, logger):
-    """2-2단계: ini 파일의 filename = 경로 수정"""
+    """2-2단계: ini 파일의 filename = 경로 수정
+    (확장자가 .ib로 변경된 파일은 matched_pairs에 반영되어 있으므로
+    대체 시 해당 .ib 이름으로 적용된다.)
+    """
     logger.log("[2-2단계] ini 파일의 경로 수정 중...")
     
     for new_ini_filename in ini_files:
@@ -202,6 +240,92 @@ def _rename_to_final_files(output_mod_path, matched_pairs, logger):
     return matched_pairs
 
 
+def _step_4_1_1_prepare_and_tempize(ini_content, matched_pairs, moved_filenames, logger):
+    """4-1-1단계: 매칭한 파일명을 임시 문자열로 바꾸고
+    Resource 섹션과의 매칭을 수집하여 Resource 헤더용 임시 토큰을 생성한다.
+    반환: (ini_content, temp_strings, resource_section_mappings, resource_temp_tokens)
+    """
+    temp_strings = {}
+
+    # 섹션 범위 파싱: 섹션명과 시작/끝 라인 인덱스 수집
+    lines = ini_content.split('\n')
+    sections = []  # list of (section_name, start_idx, end_idx)
+    current_name = None
+    current_start = None
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith('[') and s.endswith(']'):
+            if current_name is not None:
+                sections.append((current_name, current_start, i))
+            current_name = s[1:-1].strip()
+            current_start = i + 1
+    if current_name is not None:
+        sections.append((current_name, current_start, len(lines)))
+
+    # Resource 섹션명 -> 최종 Resource명 매핑 수집
+    resource_section_mappings = {}  # original_section_name -> Resource{final_name_no_ext}
+    for idx, (slot_name, final_filename) in enumerate(matched_pairs):
+        moved_filename = moved_filenames[idx]
+        moved_name_no_ext = os.path.splitext(moved_filename)[0]
+        final_name_no_ext = os.path.splitext(final_filename)[0]
+
+        # 섹션 내부에 moved_name_no_ext가 있으면 그 섹션이 Resource로 시작하는지 확인
+        for sec_name, start, end in sections:
+            if not sec_name.startswith('Resource'):
+                continue
+            section_text = '\n'.join(lines[start:end])
+            if moved_name_no_ext in section_text:
+                resource_section_mappings[sec_name] = f"Resource{final_name_no_ext}"
+
+    # Resource 섹션 헤더를 임시 토큰으로 교체하기 위한 맵 생성
+    resource_temp_tokens = {}
+    for orig_sec in resource_section_mappings.keys():
+        resource_temp_tokens[orig_sec] = f"TEMP_RESOURCE_{uuid.uuid4().hex}"
+
+    # Resource 헤더들을 먼저 임시 토큰으로 교체 (헤더 라인만 교체)
+    if resource_temp_tokens:
+        for orig_sec, temp_token in resource_temp_tokens.items():
+            # 문자열 단순 교체로 변경
+            ini_content = ini_content.replace(f'[{orig_sec}]', f'[{temp_token}]')
+            logger.log(f"    Resource 헤더 임시화: {orig_sec} -> {temp_token}")
+
+    # 이제 파일명(확장자 없는 형태)을 임시 문자열로 교체
+    for idx, (slot_name, final_filename) in enumerate(matched_pairs):
+        moved_filename = moved_filenames[idx]
+        moved_name_no_ext = os.path.splitext(moved_filename)[0]
+        final_name_no_ext = os.path.splitext(final_filename)[0]
+
+        temp_str = f"TEMP_INI_{uuid.uuid4().hex}"
+        temp_strings[temp_str] = final_name_no_ext
+
+        logger.log(f"    임시 교체: {moved_name_no_ext} -> {temp_str}")
+        ini_content = ini_content.replace(moved_name_no_ext, temp_str)
+
+    return ini_content, temp_strings, resource_section_mappings, resource_temp_tokens
+
+
+def _step_4_1_2_apply_final_replacements(ini_content, temp_strings, resource_section_mappings, resource_temp_tokens, logger):
+    """4-1-2단계: 임시 문자열을 최종 파일명으로 교체하고
+    Resource 헤더용 임시 토큰을 최종 Resource명으로 교체한다.
+    반환: ini_content
+    """
+    # 임시 문자열 -> 최종 파일명으로 교체
+    for temp_str, final_name_no_ext in temp_strings.items():
+        logger.log(f"    최종 교체: {temp_str} -> {final_name_no_ext}")
+        ini_content = ini_content.replace(temp_str, final_name_no_ext)
+
+    # Resource 토큰이 있으면 임시 토큰 -> 최종 Resource명으로 교체
+    if resource_section_mappings and resource_section_mappings.keys():
+        for orig_sec, temp_token in resource_temp_tokens.items():
+            final_resource = resource_section_mappings.get(orig_sec)
+            if final_resource:
+                # 문자열 단순 교체로 변경
+                ini_content = ini_content.replace(f'[{temp_token}]', f'[{final_resource}]')
+                logger.log(f"    Resource명 변경: {orig_sec} -> {final_resource}")
+
+    return ini_content
+
+
 def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_filenames, logger):
     """4단계: ini 파일 내용 변경"""
     logger.log("[4단계] ini 파일 내용 변경 중...")
@@ -213,42 +337,34 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
         with open(ini_path, 'r', encoding='utf-8', errors='ignore') as f:
             ini_content = f.read()
         
-        # 4-1단계: 이동 후 파일명 -> 임시 문자열로 교체
-        temp_strings = {}
-        for idx, (slot_name, final_filename) in enumerate(matched_pairs):
-            moved_filename = moved_filenames[idx]
-            moved_name_no_ext = os.path.splitext(moved_filename)[0]
-            final_name_no_ext = os.path.splitext(final_filename)[0]
-            
-            temp_str = f"TEMP_INI_{uuid.uuid4().hex}"
-            temp_strings[temp_str] = final_name_no_ext
-            
-            logger.log(f"    임시 교체: {moved_name_no_ext} -> {temp_str}")
-            ini_content = ini_content.replace(moved_name_no_ext, temp_str)
+        # 4-1-1단계: 매칭한 문자열 -> 임시 문자열로 교체
+        ini_content, temp_strings, resource_section_mappings, resource_temp_tokens = _step_4_1_1_prepare_and_tempize(
+            ini_content, matched_pairs, moved_filenames, logger
+        )
+
+        # 4-1-2단계: 임시 문자열 -> 최종 문자열로 교체
+        ini_content = _step_4_1_2_apply_final_replacements(
+            ini_content, temp_strings, resource_section_mappings, resource_temp_tokens, logger
+        )
         
-        # 4-2단계: 임시 문자열 -> 최종 파일명으로 교체
-        for temp_str, final_name_no_ext in temp_strings.items():
-            logger.log(f"    최종 교체: {temp_str} -> {final_name_no_ext}")
-            ini_content = ini_content.replace(temp_str, final_name_no_ext)
+        # 4-2단계: 특정 구문 삭제
+        logger.log(f"  4-2단계: 특정 구문 삭제 중...")
         
-        # 4-3단계: 특정 구문 삭제
-        logger.log(f"  4-3단계: 특정 구문 삭제 중...")
-        
-        # 4-3-1단계: Resource로 시작하고 CS로 끝나는 섹션 삭제 (붕스 대응)
+        # 4-2-1단계: Resource로 시작하고 CS로 끝나는 섹션 삭제 (붕스 대응)
         ini_content = _remove_resource_cs_sections(ini_content, logger)
         
-        # 4-3-2단계: Resource로 시작하는데 filename=이 없는 섹션 삭제 및 참조 제거 (copy vb 대응)
+        # 4-2-2단계: Resource로 시작하는데 filename=이 없는 섹션 삭제 및 참조 제거 (copy vb 대응)
         ini_content = _remove_resource_sections_without_filename(ini_content, logger)
         
-        # 4-3-3단계: Resource로 시작하고 format=이 있지만 filename 확장자가 .ib가 아닌 섹션 삭제 및 참조 제거
+        # 4-2-3단계: Resource로 시작하고 format=이 있지만 filename 확장자가 .ib가 아닌 섹션 삭제 및 참조 제거
         ini_content = _remove_resource_sections_fake_ib_file(ini_content, logger)
         
-        # 4-4단계: 특정 구문 처리
+        # 4-3단계: 특정 구문 처리
         logger.log(f"  4-3단계: 특정 구문 처리 중...")
         
-        # 4-4-1단계: != 조건문을 (A > B || A < B) 형태로 교체
+        # 4-3-1단계: != 조건문을 (A > B || A < B) 형태로 교체
         ini_content = _replace_not_equal_conditions(ini_content, logger)
-        
+
         with open(ini_path, 'w', encoding='utf-8') as f:
             f.write(ini_content)
         
@@ -256,7 +372,7 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
 
 
 def _remove_resource_cs_sections(ini_content, logger):
-    """4-3-1단계: Resource로 시작하고 CS로 끝나는 섹션 삭제"""
+    """4-2-1단계: Resource로 시작하고 CS로 끝나는 섹션 삭제"""
     sections_to_remove = []
     lines = ini_content.split('\n')
     
@@ -277,7 +393,7 @@ def _remove_resource_cs_sections(ini_content, logger):
 
 
 def _replace_not_equal_conditions(ini_content, logger):
-    """4-4단계: != 조건문을 (A > B || A < B) 형태로 교체"""
+    """4-3-1단계: != 조건문을 (A > B || A < B) 형태로 교체"""
     # A != B 패턴 찾기 (양쪽에 공백이 있을 수 있음)
     # 패턴: 단어/숫자/변수 != 단어/숫자/변수
     pattern = r'(\S+)\s*!=\s*(\S+)'
@@ -300,7 +416,7 @@ def _replace_not_equal_conditions(ini_content, logger):
 
 
 def _remove_resource_sections_without_filename(ini_content, logger):
-    """4-3-2단계: Resource로 시작하는데 filename=이 없는 섹션 삭제 및 참조 제거"""
+    """4-2-2단계: Resource로 시작하는데 filename=이 없는 섹션 삭제 및 참조 제거"""
     sections_to_remove = []
     lines = ini_content.split('\n')
     
@@ -363,7 +479,7 @@ def _remove_resource_sections_without_filename(ini_content, logger):
 
 
 def _remove_resource_sections_fake_ib_file(ini_content, logger):
-    """4-3-3단계: Resource로 시작하고 format=이 있지만 filename=의 확장자가 .ib가 아닌 섹션 삭제"""
+    """4-2-3단계: Resource로 시작하고 format=이 있지만 filename=의 확장자가 .ib가 아닌 섹션 삭제"""
     lines = ini_content.split('\n')
     to_remove_ranges = []  # list of (start_idx, end_idx)
     sections_to_remove = []
@@ -468,10 +584,10 @@ def generate_ini(
     3-1. 매칭할 파일명들을 임시 문자열로 변경
     3-2. 임시 문자열들을 제대로 매칭된 파일명으로 변경
     4. ini 변경
-    4-1. 매칭한 문자열을 임시 문자열로 변경
-    4-2. 임시 문자열을 매칭된 문자열로 변경
-    4-3. 특정 구문 삭제
-    4-4. 특정 구문 처리
+    4-1-1. 매칭한 문자열을 임시 문자열로 변경
+    4-1-2. 임시 문자열을 매칭된 문자열로 변경
+    4-2. 특정 구문 삭제
+    4-3. 특정 구문 처리
     5. 완료
     """
     
@@ -479,10 +595,10 @@ def generate_ini(
     output_mod_path = _copy_mod_folder(mod_folder_path, output_root, logger)
     
     # 2단계: 매칭된 파일 수집
-    matched_pairs = _collect_matched_pairs(asset_folder_path, component_slot_panel, logger)
+    matched_pairs, ib_slots = _collect_matched_pairs(asset_folder_path, component_slot_panel, logger)
     
     # 2-1단계: 파일들을 최상위 폴더로 이동
-    matched_pairs, ini_files, original_paths = _move_files_to_top(output_mod_path, matched_pairs, logger)
+    matched_pairs, ini_files, original_paths = _move_files_to_top(output_mod_path, matched_pairs, ib_slots, logger)
     
     # 2-2단계: ini 파일의 filename = 경로 수정
     _update_ini_file_paths(output_mod_path, ini_files, matched_pairs, original_paths, logger)
