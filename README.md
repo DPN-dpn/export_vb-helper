@@ -1,4 +1,4 @@
-## 이 프로그램은 챗GPT를 통해 만들어 졌음을 알려드립니다.
+## 이 프로그램은 생성형AI의 도움을 통해 만들어 졌음을 알려드립니다.
 
 # 미리보기
 ![Image](https://github.com/user-attachments/assets/e5cc1404-3931-468d-b7e2-595621d38062)
