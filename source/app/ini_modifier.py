@@ -273,9 +273,26 @@ def _step_4_1_1_prepare_and_tempize(ini_content, matched_pairs, moved_filenames,
         for sec_name, start, end in sections:
             if not sec_name.startswith('Resource'):
                 continue
-            section_text = '\n'.join(lines[start:end])
-            if moved_name_no_ext in section_text:
-                resource_section_mappings[sec_name] = f"Resource{final_name_no_ext}"
+            # 섹션 내부의 filename= 라인만 검사하여 정확히 매칭 (부분 문자열 매칭 방지)
+            section_lines = lines[start:end]
+            for ln in section_lines:
+                m = re.match(r'(?i)\s*filename\s*=\s*(.*)', ln)
+                if not m:
+                    continue
+                val = m.group(1).strip()
+                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                    val = val[1:-1]
+                base_name = os.path.splitext(os.path.basename(val))[0]
+                if base_name == moved_name_no_ext:
+                    # final_filename의 확장자가 .ib이면 섹션명 끝에 'IB'를 붙인다
+                    _, final_ext = os.path.splitext(final_filename)
+                    if final_ext.lower() == '.ib':
+                        resource_name = f"Resource{final_name_no_ext}IB"
+                    else:
+                        resource_name = f"Resource{final_name_no_ext}"
+                    resource_section_mappings[sec_name] = resource_name
+                    logger.log(f"    Resource 섹션 매핑 발견: {sec_name} -> {resource_name} (filename={val})")
+                    break
 
     # Resource 섹션 헤더를 임시 토큰으로 교체하기 위한 맵 생성
     resource_temp_tokens = {}
