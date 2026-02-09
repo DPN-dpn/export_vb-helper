@@ -376,6 +376,9 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
         # 4-2-3단계: Resource로 시작하고 format=이 있지만 filename 확장자가 .ib가 아닌 섹션 삭제 및 참조 제거
         ini_content = _remove_resource_sections_fake_ib_file(ini_content, logger)
         
+        # 4-2-4단계: Position의 서브파일들(예: Position.Boobs.buf)인 경우 섹션 삭제 (slider 모드 대응)
+        ini_content = _remove_resource_sections_position_subfiles(ini_content, logger)
+        
         # 4-3단계: 특정 구문 처리
         logger.log(f"  4-3단계: 특정 구문 처리 중...")
         
@@ -578,6 +581,68 @@ def _remove_resource_sections_fake_ib_file(ini_content, logger):
             final_lines.append(line)
 
         ini_content = '\n'.join(final_lines)
+
+    return ini_content
+
+
+def _remove_resource_sections_position_subfiles(ini_content, logger):
+    """4-2-4단계: Resource의 filename이 Position의 서브파일일 경우 섹션 삭제
+
+    목적: slider 모드 대응
+    - filename 값의 basename이 'Position.xxx' 형태(예: Position.Boobs, Position.Butt)를 가질
+      경우 해당 Resource 섹션 전체만 삭제한다. (참조 제거는 수행하지 않음)
+    """
+    lines = ini_content.split('\n')
+    to_remove_ranges = []  # list of (start_idx, end_idx)
+
+    i = 0
+    while i < len(lines):
+        line_stripped = lines[i].strip()
+        if line_stripped.startswith('[') and line_stripped.endswith(']'):
+            section_name = line_stripped[1:-1].strip()
+            if section_name.startswith('Resource'):
+                # scan until next section
+                j = i + 1
+                filename_value = None
+
+                while j < len(lines):
+                    next_line = lines[j].strip()
+                    if next_line.startswith('[') and next_line.endswith(']'):
+                        break
+
+                    m = re.match(r'(?i)filename\s*=\s*(.*)', next_line)
+                    if m:
+                        val = m.group(1).strip()
+                        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                            val = val[1:-1]
+                        filename_value = val
+                        break
+
+                    j += 1
+
+                if filename_value:
+                    base = os.path.splitext(os.path.basename(filename_value))[0]
+                    base_l = base.lower()
+                    if re.search(r'position\.', base_l) and not base_l.endswith('position'):
+                        to_remove_ranges.append((i, j))
+                        logger.log(f"    Position 서브파일로 인해 삭제 대상: {section_name} (filename={filename_value}, base={base})")
+
+                i = j
+                continue
+
+        i += 1
+
+    if not to_remove_ranges:
+        return ini_content
+
+    # 섹션 삭제
+    remove_idx = set()
+    for start, end in to_remove_ranges:
+        for k in range(start, end):
+            remove_idx.add(k)
+
+    filtered_lines = [ln for idx, ln in enumerate(lines) if idx not in remove_idx]
+    ini_content = '\n'.join(filtered_lines)
 
     return ini_content
 
