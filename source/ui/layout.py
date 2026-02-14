@@ -16,49 +16,81 @@ class MainLayout:
         self.selected_slot = None
         self.selected_file = None
 
-        self.path_selector = PathSelectorFrame(root, self)
-        self.path_selector.pack(pady=5, fill="x")
-
-        self.vertical_pane = tk.PanedWindow(root, orient="vertical")
-        self.vertical_pane.pack(fill="both", expand=True)
-
-        self.main_frame = tk.Frame(self.vertical_pane)
-        self.main_frame.pack(fill="both", expand=True)
-        self.vertical_pane.add(self.main_frame, stretch="always")
-
-        self.slot_panel = ComponentSlotPanel(self.main_frame, self)
-        self.slot_panel.pack(side="left", fill="both", expand=True)
-
-        self.control_frame = tk.Frame(self.main_frame)
-        self.control_frame.pack(side="left", padx=5, pady=5)
-
-        self.file_panel = ModFileListPanel(self.main_frame, self)
-        self.file_panel.pack(side="left", fill="y", padx=10)
-
-        self.export_frame = tk.Frame(self.vertical_pane)
-        self.export_button = tk.Button(
-            self.export_frame, text="내보내기", command=self.export
-        )
-        self.export_button.pack(pady=5, padx=10, fill="x")
-        self.vertical_pane.add(self.export_frame, stretch="never")
-
-        self.logger = LoggerFrame(self.vertical_pane)
-        self.logger.pack(fill="both", expand=True)
-        self.vertical_pane.add(self.logger, minsize=30, stretch="always")
-
         import os
 
+        # load config early so PathSelectorFrames can use initial dirs
         self.config = load_config()
         asset_folder = self.config.get("last_asset_folder")
         mod_folder = self.config.get("last_mod_folder")
         self.last_asset_folder = (
-            asset_folder
-            if asset_folder and os.path.exists(asset_folder)
-            else os.getcwd()
+            asset_folder if asset_folder and os.path.exists(asset_folder) else os.getcwd()
         )
         self.last_mod_folder = (
             mod_folder if mod_folder and os.path.exists(mod_folder) else os.getcwd()
         )
+
+        self.vertical_pane = tk.PanedWindow(root, orient="vertical")
+        self.vertical_pane.pack(fill="both", expand=True)
+
+        # content_frame groups top selectors and main panels; we'll arrange
+        # two vertical columns so (1+3) are in the left column and (2+4) in the right.
+        self.content_frame = tk.Frame(self.vertical_pane)
+        self.content_frame.pack(fill="both", expand=True)
+
+        # columns_frame holds two columns side-by-side
+        self.columns_frame = tk.Frame(self.content_frame)
+        self.columns_frame.pack(fill="both", expand=True)
+
+        # Left column: asset selector (1) on top, component slots (3) beneath
+        self.left_column = tk.Frame(self.columns_frame)
+        self.left_column.pack(side="left", fill="both", expand=True)
+
+        self.path_selector_asset = PathSelectorFrame(self.left_column, self, show_asset=True, show_mod=False)
+        self.path_selector_asset.pack(side="top", fill="x", padx=5, pady=5)
+
+        self.slot_panel = ComponentSlotPanel(self.left_column, self)
+        self.slot_panel.pack(side="top", fill="both", expand=True, padx=5, pady=5)
+
+        # control_frame remains related to the left column (below slots)
+        self.control_frame = tk.Frame(self.left_column)
+        self.control_frame.pack(side="top", fill="x", padx=5, pady=5)
+
+        # Right column: mod selector (2) on top, mod file list (4) beneath
+        self.right_column = tk.Frame(self.columns_frame)
+        self.right_column.pack(side="left", fill="both", expand=True)
+
+        self.path_selector_mod = PathSelectorFrame(self.right_column, self, show_asset=False, show_mod=True)
+        self.path_selector_mod.pack(side="top", fill="x", padx=5, pady=5)
+
+        self.file_panel = ModFileListPanel(self.right_column, self)
+        self.file_panel.pack(side="top", fill="both", expand=True, padx=10, pady=5)
+
+        # keep compatibility: some modules expect `ui.path_selector.asset_path_var` etc.
+        self.path_selector = self
+
+        # Remove export from content_frame and group export + logger into bottom_frame
+        # Bottom frame groups export_frame and logger
+        self.bottom_frame = tk.Frame(self.vertical_pane)
+
+        # Export row (fixed height) as a child of bottom_frame
+        self.export_frame = tk.Frame(self.bottom_frame, height=40)
+        self.export_frame.pack_propagate(False)
+        self.export_button = tk.Button(
+            self.export_frame, text="내보내기", command=self.export
+        )
+        self.export_button.pack(pady=5, padx=10, fill="x")
+        # pack export_frame at top of bottom_frame
+        self.export_frame.pack(side="top", fill="x")
+
+        # Logger fills the remainder of bottom_frame
+        self.logger = LoggerFrame(self.bottom_frame)
+        self.logger.pack(fill="both", expand=True)
+
+        # Add two panes: content and bottom_frame — only the seam between them is resizable
+        self.vertical_pane.add(self.content_frame, stretch="always", minsize=220)
+        self.vertical_pane.add(self.bottom_frame, minsize=100, stretch="never")
+
+        
 
     def set_matcher(self, matcher):
         self.matcher = matcher
@@ -85,15 +117,7 @@ class MainLayout:
 
     def log(self, msg):
         self.logger.log(msg)
-
-    def ask_folder(self, title, initial_dir=None):
-        from tkinter import filedialog
-        import os
-
-        return filedialog.askdirectory(
-            title=title, initialdir=initial_dir or os.getcwd()
-        )
-
+    
     def on_asset_folder_selected(self, folder):
         if folder:
             self.last_asset_folder = folder
@@ -116,8 +140,9 @@ class MainLayout:
         import traceback
 
         try:
-            asset_path = self.path_selector.asset_path_var.get()
-            mod_path = self.path_selector.mod_path_var.get()
+            # Path variables are attached to this controller by PathSelectorFrame
+            asset_path = self.asset_path_var.get()
+            mod_path = self.mod_path_var.get()
             output_root = self.config.get("output_root", "output")
             output_path = ini_modifier.generate_ini(
                 asset_path, mod_path, self.slot_panel, output_root, self.logger
