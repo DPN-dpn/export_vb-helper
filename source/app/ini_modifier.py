@@ -385,6 +385,9 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
         # 4-3-1단계: != 조건문을 (A > B || A < B) 형태로 교체
         ini_content = _replace_not_equal_conditions(ini_content, logger)
 
+        # 4-3-2단계: 'key = ' 로 시작하는 줄에서 값 내부의 '=' 문자를 '+'로 교체
+        ini_content = _replace_key_equals_in_value(ini_content, logger)
+
         with open(ini_path, 'w', encoding='utf-8') as f:
             f.write(ini_content)
         
@@ -433,6 +436,25 @@ def _replace_not_equal_conditions(ini_content, logger):
         logger.log(f"    != 조건문 {replaced_count}개 교체 완료")
     
     return ini_content
+
+
+def _replace_key_equals_in_value(ini_content, logger):
+    """4-3-2단계: 'key =' 로 시작하는 줄에서 값 내부의 '=' 문자를 '+'로 교체"""
+    logger.log("  4-3-2단계: key 값 내부의 '=' -> '+' 변경 검사 중...")
+
+    pattern = re.compile(r'(^\s*key\s*=\s*)(.*)$', flags=re.IGNORECASE | re.MULTILINE)
+
+    def repl(m):
+        prefix = m.group(1)
+        val = m.group(2)
+        if '=' in val:
+            new_val = val.replace('=', '+')
+            logger.log(f"    key 라인 값 변경: {val} -> {new_val}")
+            return prefix + new_val
+        return m.group(0)
+
+    new_content = pattern.sub(repl, ini_content)
+    return new_content
 
 
 def _remove_resource_sections_without_filename(ini_content, logger):
