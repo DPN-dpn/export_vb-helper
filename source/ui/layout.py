@@ -11,7 +11,13 @@ import os
 
 
 class MainLayout:
-    def __init__(self, root):
+    """Main application layout and controller for UI interactions.
+
+    Holds references to path selector frames, panels and the matcher. This
+    class is responsible for wiring user actions to the matcher and for
+    persisting last-used folders via `save_config` when appropriate.
+    """
+    def __init__(self, root: tk.Misc) -> None:
         self.root = root
         self.matcher = None
         self.selected_slot = None
@@ -208,6 +214,14 @@ class MainLayout:
             if self.matcher:
                 self.matcher.select_asset_folder_from_path(subfolder)
 
+    def notify_asset_subfolder_no_save(self, subfolder):
+        """Notify matcher about a selected asset subfolder without saving config."""
+        if subfolder and self.matcher:
+            try:
+                self.matcher.select_asset_folder_from_path(subfolder)
+            except Exception:
+                pass
+
     def on_mod_folder_selected(self, folder):
         if folder:
             self.last_mod_folder = folder
@@ -232,6 +246,14 @@ class MainLayout:
                 )
             if self.matcher:
                 self.matcher.select_mod_folder_from_path(subfolder)
+
+    def notify_mod_subfolder_no_save(self, subfolder):
+        """Notify matcher about a selected mod subfolder without saving config."""
+        if subfolder and self.matcher:
+            try:
+                self.matcher.select_mod_folder_from_path(subfolder)
+            except Exception:
+                pass
 
     def export(self):
         import traceback

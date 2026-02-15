@@ -35,6 +35,12 @@ class ComponentMatcherApp:
             path = os.path.join(folder, "hash.json")
             if not os.path.isfile(path):
                 self.ui.log("에셋 폴더에 hash.json이 없습니다.")
+                # clear any previously shown components when hash.json missing
+                self.components = []
+                try:
+                    self.ui.display_components(self.components, self.mod_files)
+                except Exception:
+                    pass
                 return
 
             try:
@@ -42,6 +48,12 @@ class ComponentMatcherApp:
                     data = json.load(f)
             except json.JSONDecodeError as e:
                 self.ui.log(f"hash.json 파싱 실패: {e}")
+                # clear components on parse error
+                self.components = []
+                try:
+                    self.ui.display_components(self.components, self.mod_files)
+                except Exception:
+                    pass
                 return
 
             components = []
@@ -73,3 +85,9 @@ class ComponentMatcherApp:
             self.ui.display_components(self.components, self.mod_files)
         except Exception as e:
             self.ui.log(f"[오류] 컴포넌트 로딩 실패: {e}")
+            # ensure UI cleared on unexpected error
+            try:
+                self.components = []
+                self.ui.display_components(self.components, self.mod_files)
+            except Exception:
+                pass
