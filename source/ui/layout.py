@@ -9,16 +9,11 @@ from ui.mod_file_panel import ModFileListPanel
 from ui.logger_frame import LoggerFrame
 
 from app import ini_modifier
+from app.auto_fill import auto_fill_components
 from config import load_config, save_config
 
 
 class MainLayout:
-    """Main application layout and controller for UI interactions.
-
-    Holds references to path selector frames, panels and the matcher. This
-    class is responsible for wiring user actions to the matcher and for
-    persisting last-used folders via `save_config` when appropriate.
-    """
 
     def __init__(self, root: tk.Misc) -> None:
         self.root = root
@@ -26,9 +21,7 @@ class MainLayout:
         self.selected_slot = None
         self.selected_file = None
 
-        import os
-
-        # load config early so PathSelectorFrames can use initial dirs
+        # 설정 초기화
         self.config = load_config()
         asset_folder = self.config.get("last_asset_folder")
         mod_folder = self.config.get("last_mod_folder")
@@ -44,87 +37,85 @@ class MainLayout:
         self.vertical_pane = tk.PanedWindow(root, orient="vertical")
         self.vertical_pane.pack(fill="both", expand=True)
 
-        # content_frame groups top selectors and main panels; we'll arrange
-        # two vertical columns so (1+3) are in the left column and (2+4) in the right.
+        # 상단 프레임: (왼쪽: 에셋 셀렉터 + 자동 채우기 버튼 + 슬롯 패널, 오른쪽: 모드 셀렉터 + 모드 파일 패널)
         self.content_frame = tk.Frame(self.vertical_pane)
         self.content_frame.pack(fill="both", expand=True)
 
-        # columns_frame holds two columns side-by-side
+        # 상단 프레임 좌우 분할
         self.columns_frame = tk.Frame(self.content_frame)
         self.columns_frame.pack(fill="both", expand=True)
-
-        # Use grid for columns_frame so we can assign equal weight to both columns
         self.columns_frame.grid_rowconfigure(0, weight=1)
-        # Use a uniform group so both columns get identical width allocation
         self.columns_frame.grid_columnconfigure(0, weight=1, uniform="cols")
         self.columns_frame.grid_columnconfigure(1, weight=1, uniform="cols")
 
-        # Left column: asset selector (1) on top, component slots (3) beneath
+        # 왼쪽 열: 에셋 선택(위) + 자동 채우기 버튼 + 컴포넌트 슬롯 패널(아래)
         self.left_column = tk.Frame(self.columns_frame)
         self.left_column.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
 
+        # 에셋 선택
         self.path_selector_asset = PathSelectorFrame(
             self.left_column, self, show_asset=True, show_mod=False
         )
         self.path_selector_asset.pack(side="top", fill="x", padx=5, pady=5)
 
+        # 자동 채우기 버튼
+        self.slot_controls = tk.Frame(self.left_column)
+        self.slot_controls.pack(side="top", fill="x", padx=5, pady=(0, 5))
+        self.auto_fill_btn = tk.Button(
+            self.slot_controls, text="자동 채우기", command=self.on_auto_fill
+        )
+        self.auto_fill_btn.pack(side="left", expand=True, fill="x", padx=5)
+
+        # 컴포넌트 슬롯 패널
         self.slot_panel = ComponentSlotPanel(self.left_column, self)
         self.slot_panel.pack(side="top", fill="both", expand=True, padx=5, pady=5)
 
-        # control_frame remains related to the left column (below slots)
-        self.control_frame = tk.Frame(self.left_column)
-        self.control_frame.pack(side="top", fill="x", padx=5, pady=5)
-
-        # Right column: mod selector (2) on top, mod file list (4) beneath
+        # 오른쪽 열: 모드 선택(위) + 모드 파일 목록(아래)
         self.right_column = tk.Frame(self.columns_frame)
         self.right_column.grid(row=0, column=1, sticky="nsew", padx=0, pady=0)
 
+        # 모드 선택
         self.path_selector_mod = PathSelectorFrame(
             self.right_column, self, show_asset=False, show_mod=True
         )
         self.path_selector_mod.pack(side="top", fill="x", padx=5, pady=5)
 
-        # Initialize path selector frames with values from config (do not re-save here)
-        if hasattr(self, "path_selector_asset"):
-            self.path_selector_asset.asset_path_var.set(self.last_asset_folder)
-            if hasattr(self.path_selector_asset, "asset_display_var"):
-                self.path_selector_asset.asset_display_var.set(self.last_asset_folder)
-            self.path_selector_asset.update_asset_options()
-
-        if hasattr(self, "path_selector_mod"):
-            self.path_selector_mod.mod_path_var.set(self.last_mod_folder)
-            if hasattr(self.path_selector_mod, "mod_display_var"):
-                self.path_selector_mod.mod_display_var.set(self.last_mod_folder)
-            self.path_selector_mod.update_mod_options()
-
+        # 모드 파일 목록
         self.file_panel = ModFileListPanel(self.right_column, self)
-        # match left-side horizontal padding to keep visual balance
         self.file_panel.pack(side="top", fill="both", expand=True, padx=5, pady=5)
 
-        # keep compatibility: some modules expect `ui.path_selector.asset_path_var` etc.
-        self.path_selector = self
-
-        # Remove export from content_frame and group export + logger into bottom_frame
-        # Bottom frame groups export_frame and logger
+        # 하단 프레임: 내보내기 버튼 + 로그 영역
         self.bottom_frame = tk.Frame(self.vertical_pane)
 
-        # Export row (fixed height) as a child of bottom_frame
+        # 내보내기 버튼
         self.export_frame = tk.Frame(self.bottom_frame, height=40)
         self.export_frame.pack_propagate(False)
         self.export_button = tk.Button(
             self.export_frame, text="내보내기", command=self.export
         )
         self.export_button.pack(pady=5, padx=10, fill="x")
-        # pack export_frame at top of bottom_frame
         self.export_frame.pack(side="top", fill="x")
 
-        # Logger fills the remainder of bottom_frame
+        # 로그 영역
         self.logger = LoggerFrame(self.bottom_frame)
         self.logger.pack(fill="both", expand=True)
 
-        # Add two panes: content and bottom_frame — only the seam between them is resizable
+        # 상단 하단 프레임 크기 조절 패인
         self.vertical_pane.add(self.content_frame, stretch="always", minsize=220)
         self.vertical_pane.add(self.bottom_frame, minsize=100, stretch="never")
+
+        # 경로 선택 초기화
+        if hasattr(self, "path_selector_asset"):
+            self.path_selector_asset.asset_path_var.set(self.last_asset_folder)
+            if hasattr(self.path_selector_asset, "asset_display_var"):
+                self.path_selector_asset.asset_display_var.set(self.last_asset_folder)
+            self.path_selector_asset.update_asset_options()
+        if hasattr(self, "path_selector_mod"):
+            self.path_selector_mod.mod_path_var.set(self.last_mod_folder)
+            if hasattr(self.path_selector_mod, "mod_display_var"):
+                self.path_selector_mod.mod_display_var.set(self.last_mod_folder)
+            self.path_selector_mod.update_mod_options()
+        self.path_selector = self
 
     def set_matcher(self, matcher):
         self.matcher = matcher
@@ -193,6 +184,12 @@ class MainLayout:
     def set_selected_file(self, fname):
         self.selected_file = fname
 
+    def on_auto_fill(self):
+        try:
+            auto_fill_components(self)
+        except Exception as e:
+            self.log(f"[오류] 자동 채우기 실패: {e}")
+
     def assign_selected_file(self):
         if not self.selected_slot or not self.selected_file:
             self.log("[경고] 슬롯 또는 파일이 선택되지 않았습니다.")
@@ -208,11 +205,9 @@ class MainLayout:
         self.file_panel.set_file_list(mod_files)
 
     def log(self, msg):
-        # 초기화 중에는 `self.logger`가 아직 없을 수 있으니 안전하게 처리
         try:
             self.logger.log(msg)
         except Exception:
-            # 로거가 없거나 오류가 발생하면 콘솔에 출력
             try:
                 print(msg)
             except Exception:
@@ -228,12 +223,8 @@ class MainLayout:
                 self.matcher.select_asset_folder_from_path(folder)
 
     def on_asset_subfolder_selected(self, subfolder):
-        # Called when a subfolder inside the selected Assets base is chosen
-        # When a subfolder is chosen, save the base Assets folder and notify matcher
-        if subfolder:
-            # 콤보박스 선택은 config에 영향을 주지 않음 — matcher에만 알림
-            if self.matcher:
-                self.matcher.select_asset_folder_from_path(subfolder)
+        if subfolder and self.matcher:
+            self.matcher.select_asset_folder_from_path(subfolder)
 
     def on_mod_folder_selected(self, folder):
         if folder:
@@ -245,18 +236,13 @@ class MainLayout:
                 self.matcher.select_mod_folder_from_path(folder)
 
     def on_mod_subfolder_selected(self, subfolder):
-        # Called when a subfolder inside the selected Mods base is chosen
-        # When a subfolder is chosen, save the base Mods folder and notify matcher
-        if subfolder:
-            # 콤보박스 선택은 config에 영향을 주지 않음 — matcher에만 알림
-            if self.matcher:
-                self.matcher.select_mod_folder_from_path(subfolder)
+        if subfolder and self.matcher:
+            self.matcher.select_mod_folder_from_path(subfolder)
 
     def export(self):
         import traceback
 
         try:
-            # Path variables are attached to this controller by PathSelectorFrame
             asset_path = self.asset_path_var.get()
             mod_path = self.mod_path_var.get()
             output_root = self.config.get("output_root", "output")
@@ -265,8 +251,6 @@ class MainLayout:
             )
             self.log("내보내기 완료")
             if self.config.get("open_after_export", True):
-                import subprocess, platform
-
                 if platform.system() == "Windows":
                     subprocess.Popen(f'explorer "{output_path}"')
                 elif platform.system() == "Darwin":
