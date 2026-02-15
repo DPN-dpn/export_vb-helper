@@ -14,7 +14,9 @@ class ModFileListPanel(tk.Frame):
         filter_frame = tk.Frame(self)
         filter_frame.pack(fill="x", padx=2, pady=2)
         tk.Label(filter_frame, text="🔍").pack(side="left", padx=(0, 6))
-        tk.Entry(filter_frame, textvariable=self.filter_var).pack(side="left", fill="x", expand=True)
+        tk.Entry(filter_frame, textvariable=self.filter_var).pack(
+            side="left", fill="x", expand=True
+        )
 
         # 📜 리스트박스 — 컨테이너 가득 채우도록 설정
         self.listbox = tk.Listbox(self)

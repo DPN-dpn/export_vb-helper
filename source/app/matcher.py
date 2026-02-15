@@ -28,7 +28,16 @@ class ComponentMatcherApp:
         self.ui.log(f"[모드 폴더 선택] {display}")
         self.ui.log(f"불러온 파일: {len(self.mod_files)}개")
 
-        self.ui.display_components(self.components, self.mod_files)
+        # 모드 폴더 선택은 에셋(컴포넌트) 목록을 변경하지 않고
+        # 우측의 모드 파일 목록만 갱신해야 한다.
+        try:
+            self.ui.file_panel.set_file_list(self.mod_files)
+        except Exception:
+            # 예외가 발생하면 기존 동작처럼 display_components로 폴백
+            try:
+                self.ui.display_components(self.components, self.mod_files)
+            except Exception:
+                pass
 
     def load_components_from_hash_json(self, folder):
         try:

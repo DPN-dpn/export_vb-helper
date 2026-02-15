@@ -1,13 +1,15 @@
-import tkinter as tk
-from .path_selector import PathSelectorFrame
-from .component_slot_panel import ComponentSlotPanel
-from .mod_file_panel import ModFileListPanel
-from .logger_frame import LoggerFrame
-from app import ini_modifier
-from config import load_config, save_config
+import os
 import subprocess
 import platform
-import os
+import tkinter as tk
+
+from ui.path_selector import PathSelectorFrame
+from ui.component_slot_panel import ComponentSlotPanel
+from ui.mod_file_panel import ModFileListPanel
+from ui.logger_frame import LoggerFrame
+
+from app import ini_modifier
+from config import load_config, save_config
 
 
 class MainLayout:
@@ -17,6 +19,7 @@ class MainLayout:
     class is responsible for wiring user actions to the matcher and for
     persisting last-used folders via `save_config` when appropriate.
     """
+
     def __init__(self, root: tk.Misc) -> None:
         self.root = root
         self.matcher = None
@@ -30,7 +33,9 @@ class MainLayout:
         asset_folder = self.config.get("last_asset_folder")
         mod_folder = self.config.get("last_mod_folder")
         self.last_asset_folder = (
-            asset_folder if asset_folder and os.path.exists(asset_folder) else os.getcwd()
+            asset_folder
+            if asset_folder and os.path.exists(asset_folder)
+            else os.getcwd()
         )
         self.last_mod_folder = (
             mod_folder if mod_folder and os.path.exists(mod_folder) else os.getcwd()
@@ -58,7 +63,9 @@ class MainLayout:
         self.left_column = tk.Frame(self.columns_frame)
         self.left_column.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
 
-        self.path_selector_asset = PathSelectorFrame(self.left_column, self, show_asset=True, show_mod=False)
+        self.path_selector_asset = PathSelectorFrame(
+            self.left_column, self, show_asset=True, show_mod=False
+        )
         self.path_selector_asset.pack(side="top", fill="x", padx=5, pady=5)
 
         self.slot_panel = ComponentSlotPanel(self.left_column, self)
@@ -72,30 +79,23 @@ class MainLayout:
         self.right_column = tk.Frame(self.columns_frame)
         self.right_column.grid(row=0, column=1, sticky="nsew", padx=0, pady=0)
 
-        self.path_selector_mod = PathSelectorFrame(self.right_column, self, show_asset=False, show_mod=True)
+        self.path_selector_mod = PathSelectorFrame(
+            self.right_column, self, show_asset=False, show_mod=True
+        )
         self.path_selector_mod.pack(side="top", fill="x", padx=5, pady=5)
 
         # Initialize path selector frames with values from config (do not re-save here)
-        try:
-            # set base folders and update combobox lists
+        if hasattr(self, "path_selector_asset"):
             self.path_selector_asset.asset_path_var.set(self.last_asset_folder)
-            try:
+            if hasattr(self.path_selector_asset, "asset_display_var"):
                 self.path_selector_asset.asset_display_var.set(self.last_asset_folder)
-            except Exception:
-                pass
             self.path_selector_asset.update_asset_options()
-        except Exception:
-            pass
 
-        try:
+        if hasattr(self, "path_selector_mod"):
             self.path_selector_mod.mod_path_var.set(self.last_mod_folder)
-            try:
+            if hasattr(self.path_selector_mod, "mod_display_var"):
                 self.path_selector_mod.mod_display_var.set(self.last_mod_folder)
-            except Exception:
-                pass
             self.path_selector_mod.update_mod_options()
-        except Exception:
-            pass
 
         self.file_panel = ModFileListPanel(self.right_column, self)
         # match left-side horizontal padding to keep visual balance
@@ -126,45 +126,66 @@ class MainLayout:
         self.vertical_pane.add(self.content_frame, stretch="always", minsize=220)
         self.vertical_pane.add(self.bottom_frame, minsize=100, stretch="never")
 
-        
-
     def set_matcher(self, matcher):
         self.matcher = matcher
-        # notify matcher of current base folders (loaded from config at startup)
+        if not self.matcher:
+            return
+
+        # 자산/모드 기본 선택 적용 (콤보박스의 선택 우선, 없으면 마지막 경로 사용)
+        self._apply_initial_selection(
+            kind="asset",
+            selector_attr="path_selector_asset",
+            subvar_attr="asset_subvar",
+            path_var_attr="asset_path_var",
+            last_attr="last_asset_folder",
+            matcher_method="select_asset_folder_from_path",
+        )
+
+        self._apply_initial_selection(
+            kind="mod",
+            selector_attr="path_selector_mod",
+            subvar_attr="mod_subvar",
+            path_var_attr="mod_path_var",
+            last_attr="last_mod_folder",
+            matcher_method="select_mod_folder_from_path",
+        )
+
+    def _apply_initial_selection(
+        self,
+        kind: str,
+        selector_attr: str,
+        subvar_attr: str,
+        path_var_attr: str,
+        last_attr: str,
+        matcher_method: str,
+    ) -> None:
+        ps = getattr(self, selector_attr, None)
+        selected = None
         try:
-            # Prefer an explicitly selected subfolder from the asset combobox
-            asset_selected = None
-            try:
-                if hasattr(self, "path_selector_asset") and hasattr(self.path_selector_asset, "asset_subvar"):
-                    subname = self.path_selector_asset.asset_subvar.get()
-                    base = getattr(self, "asset_path_var", None) and self.asset_path_var.get()
-                    if base and subname:
-                        asset_selected = os.path.join(base, subname)
-            except Exception:
-                asset_selected = None
-            if asset_selected and self.matcher:
-                self.matcher.select_asset_folder_from_path(asset_selected)
-            elif self.last_asset_folder and self.matcher:
-                self.matcher.select_asset_folder_from_path(self.last_asset_folder)
+            if ps and hasattr(ps, subvar_attr):
+                subname = getattr(ps, subvar_attr).get()
+                base = (
+                    getattr(self, path_var_attr, None)
+                    and getattr(self, path_var_attr).get()
+                )
+                if base and subname:
+                    selected = os.path.join(base, subname)
         except Exception:
-            pass
-        try:
-            # Prefer an explicitly selected subfolder from the mod combobox
-            mod_selected = None
+            selected = None
+
+        if selected:
             try:
-                if hasattr(self, "path_selector_mod") and hasattr(self.path_selector_mod, "mod_subvar"):
-                    subname = self.path_selector_mod.mod_subvar.get()
-                    base = getattr(self, "mod_path_var", None) and self.mod_path_var.get()
-                    if base and subname:
-                        mod_selected = os.path.join(base, subname)
+                getattr(self.matcher, matcher_method)(selected)
             except Exception:
-                mod_selected = None
-            if mod_selected and self.matcher:
-                self.matcher.select_mod_folder_from_path(mod_selected)
-            elif self.last_mod_folder and self.matcher:
-                self.matcher.select_mod_folder_from_path(self.last_mod_folder)
-        except Exception:
-            pass
+                pass
+            return
+
+        last = getattr(self, last_attr, None)
+        if last:
+            try:
+                getattr(self.matcher, matcher_method)(last)
+            except Exception:
+                pass
 
     def set_selected_slot(self, index, key, variant=None):
         self.selected_slot = (index, key, variant)
@@ -187,8 +208,16 @@ class MainLayout:
         self.file_panel.set_file_list(mod_files)
 
     def log(self, msg):
-        self.logger.log(msg)
-    
+        # 초기화 중에는 `self.logger`가 아직 없을 수 있으니 안전하게 처리
+        try:
+            self.logger.log(msg)
+        except Exception:
+            # 로거가 없거나 오류가 발생하면 콘솔에 출력
+            try:
+                print(msg)
+            except Exception:
+                pass
+
     def on_asset_folder_selected(self, folder):
         if folder:
             self.last_asset_folder = folder
@@ -202,25 +231,9 @@ class MainLayout:
         # Called when a subfolder inside the selected Assets base is chosen
         # When a subfolder is chosen, save the base Assets folder and notify matcher
         if subfolder:
-            try:
-                base = self.asset_path_var.get()
-            except Exception:
-                base = None
-            if base:
-                self.last_asset_folder = base
-                save_config(
-                    {"last_asset_folder": base, "last_mod_folder": self.last_mod_folder}
-                )
+            # 콤보박스 선택은 config에 영향을 주지 않음 — matcher에만 알림
             if self.matcher:
                 self.matcher.select_asset_folder_from_path(subfolder)
-
-    def notify_asset_subfolder_no_save(self, subfolder):
-        """Notify matcher about a selected asset subfolder without saving config."""
-        if subfolder and self.matcher:
-            try:
-                self.matcher.select_asset_folder_from_path(subfolder)
-            except Exception:
-                pass
 
     def on_mod_folder_selected(self, folder):
         if folder:
@@ -235,25 +248,9 @@ class MainLayout:
         # Called when a subfolder inside the selected Mods base is chosen
         # When a subfolder is chosen, save the base Mods folder and notify matcher
         if subfolder:
-            try:
-                base = self.mod_path_var.get()
-            except Exception:
-                base = None
-            if base:
-                self.last_mod_folder = base
-                save_config(
-                    {"last_asset_folder": self.last_asset_folder, "last_mod_folder": base}
-                )
+            # 콤보박스 선택은 config에 영향을 주지 않음 — matcher에만 알림
             if self.matcher:
                 self.matcher.select_mod_folder_from_path(subfolder)
-
-    def notify_mod_subfolder_no_save(self, subfolder):
-        """Notify matcher about a selected mod subfolder without saving config."""
-        if subfolder and self.matcher:
-            try:
-                self.matcher.select_mod_folder_from_path(subfolder)
-            except Exception:
-                pass
 
     def export(self):
         import traceback
