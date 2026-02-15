@@ -1,5 +1,6 @@
 import os
 import json
+from pathlib import Path
 from app.file_manager import scan_folder
 
 
@@ -11,16 +12,20 @@ class ComponentMatcherApp:
         self.components = []
 
     def select_asset_folder_from_path(self, folder):
+        # Use original folder for scanning, but normalize for UI display/logging
         self.asset_files = scan_folder(folder)
-        self.ui.path_selector.asset_path_var.set(folder)
-        self.ui.log(f"[에셋 폴더 선택] {folder}")
+        display = Path(folder).as_posix()
+        self.ui.path_selector.asset_path_var.set(display)
+        self.ui.log(f"[에셋 폴더 선택] {display}")
         self.ui.log(f"불러온 파일: {len(self.asset_files)}개")
         self.load_components_from_hash_json(folder)
 
     def select_mod_folder_from_path(self, folder):
+        # Use original folder for scanning, but normalize for UI display/logging
         self.mod_files = scan_folder(folder)
-        self.ui.path_selector.mod_path_var.set(folder)
-        self.ui.log(f"[모드 폴더 선택] {folder}")
+        display = Path(folder).as_posix()
+        self.ui.path_selector.mod_path_var.set(display)
+        self.ui.log(f"[모드 폴더 선택] {display}")
         self.ui.log(f"불러온 파일: {len(self.mod_files)}개")
 
         self.ui.display_components(self.components, self.mod_files)

@@ -8,16 +8,17 @@ class ModFileListPanel(tk.Frame):
         self.controller = controller
         self.full_file_list = []  # 전체 파일 목록 저장
 
-        tk.Label(self, text="모드 파일 목록").pack()
-
-        # 🔍 필터 입력창
+        # 🔍 필터 입력창 (라벨 + 입력창)
         self.filter_var = tk.StringVar()
         self.filter_var.trace_add("write", self.update_filtered_list)
-        tk.Entry(self, textvariable=self.filter_var).pack(fill="x", padx=2, pady=2)
+        filter_frame = tk.Frame(self)
+        filter_frame.pack(fill="x", padx=2, pady=2)
+        tk.Label(filter_frame, text="🔍").pack(side="left", padx=(0, 6))
+        tk.Entry(filter_frame, textvariable=self.filter_var).pack(side="left", fill="x", expand=True)
 
-        # 📜 리스트박스
-        self.listbox = tk.Listbox(self, height=30, width=60)
-        self.listbox.pack(fill="y")
+        # 📜 리스트박스 — 컨테이너 가득 채우도록 설정
+        self.listbox = tk.Listbox(self)
+        self.listbox.pack(fill="both", expand=True, padx=2, pady=2)
         self.listbox.bind("<<ListboxSelect>>", self.on_file_selected)
         self.listbox.bind("<Double-Button-1>", self.on_file_activate)
         self.listbox.bind("<Return>", self.on_file_activate)
