@@ -161,12 +161,24 @@ class PathSelectorFrame(tk.Frame):
             combobox.set("")
             return
 
-        # 자동 초기화: 첫 항목 선택, 저장하지 않음
-        combobox.current(0)
-        first_selected = os.path.join(base, subs[0])
+        # 이전 선택 보존: 새로고침 후에도 사용자가 선택한 항목이 남아있으면 그 인덱스를 유지
+        subvar = getattr(self, f"{kind}_subvar")
+        prev_selected = subvar.get()
+        if prev_selected and prev_selected in subs:
+            idx = subs.index(prev_selected)
+            combobox.current(idx)
+            subvar.set(prev_selected)
+            selected_path = os.path.join(base, prev_selected)
+        else:
+            # 자동 초기화: 첫 항목 선택, 저장하지 않음
+            combobox.current(0)
+            first = subs[0]
+            subvar.set(first)
+            selected_path = os.path.join(base, first)
+
         fn = getattr(self.controller, f"on_{kind}_subfolder_selected", None)
         if callable(fn):
-            fn(first_selected)
+            fn(selected_path)
         log_fn = getattr(self.controller, "log", None)
         if callable(log_fn):
             label = "에셋" if kind == "asset" else "모드"

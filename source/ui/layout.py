@@ -64,7 +64,8 @@ class MainLayout:
         self.auto_fill_btn = tk.Button(
             self.slot_controls, text="자동 채우기", command=self.on_auto_fill
         )
-        self.auto_fill_btn.pack(side="left", expand=True, fill="x", padx=5)
+        # 자동 채우기 버튼 숨김
+        # self.auto_fill_btn.pack(side="left", expand=True, fill="x", padx=5)
 
         # 컴포넌트 슬롯 패널
         self.slot_panel = ComponentSlotPanel(self.left_column, self)
