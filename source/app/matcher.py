@@ -100,3 +100,19 @@ class ComponentMatcherApp:
                 self.ui.display_components(self.components, self.mod_files)
             except Exception:
                 pass
+
+    def load_tree_from_mod(self, mod_files):
+        """모드 파일 목록으로 트리뷰에 넣을 행 목록을 생성합니다.
+
+        반환 형식: [(component, hash, filename), ...]
+        현재는 `component`와 `hash`를 빈 문자열로 채우고, `filename`에
+        기존에 사용하던 파일명 값을 그대로 넣습니다. 추후 컴포넌트/해시
+        계산 로직을 여기서 확장하면 됩니다.
+        """
+        rows = []
+        try:
+            for fname in mod_files:
+                rows.append(("", "", fname))
+        except Exception:
+            rows = [("", "", f) for f in list(mod_files or [])]
+        return rows

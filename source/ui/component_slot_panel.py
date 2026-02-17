@@ -5,6 +5,7 @@ class ComponentSlotPanel(tk.Frame):
     def __init__(self, master, controller):
         super().__init__(master)
         self.controller = controller
+        self._tooltip = None
         self.slot_labels = []
         self.component_widgets = []
         self.selected_index = None
@@ -30,6 +31,7 @@ class ComponentSlotPanel(tk.Frame):
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
         )
         self.canvas.bind("<Configure>", self._resize_inner_frame)
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
     def _resize_inner_frame(self, event):
         self.canvas.itemconfig(self.inner_window, width=event.width)
@@ -178,6 +180,11 @@ class ComponentSlotPanel(tk.Frame):
             "<Button-1>", lambda e: self.select_slot(comp_index, key, variant)
         )
 
+        # 툴팁 바인딩: 레이블에 마우스 올리면 현재 텍스트 표시
+        file_label.bind("<Enter>", lambda e, v=val, w=file_label: self._on_label_enter(e, v, w))
+        file_label.bind("<Leave>", lambda e: self._on_label_leave(e))
+        file_label.bind("<Motion>", lambda e, w=file_label: self._on_label_motion(e, w))
+
         clear_btn = tk.Button(
             row,
             text="X",
@@ -194,6 +201,45 @@ class ComponentSlotPanel(tk.Frame):
             (comp_index, key, variant, key_label, hash_label, file_label)
         )
         return val
+
+    # ---- tooltip helpers ----
+    def _on_label_enter(self, event, var, widget):
+        text = var.get()
+        if not text:
+            return
+        self._hide_tooltip()
+        try:
+            tw = tk.Toplevel(self)
+            tw.wm_overrideredirect(True)
+            lbl = tk.Label(tw, text=text, bg="#ffffe0", relief="solid", bd=1, justify="left")
+            lbl.pack(ipadx=4, ipady=2)
+            x = widget.winfo_rootx() + 20
+            y = widget.winfo_rooty() + 20
+            tw.wm_geometry(f"+{x}+{y}")
+            self._tooltip = tw
+        except Exception:
+            self._tooltip = None
+
+    def _on_label_leave(self, event=None):
+        self._hide_tooltip()
+
+    def _on_label_motion(self, event, widget):
+        if not getattr(self, "_tooltip", None):
+            return
+        try:
+            x = widget.winfo_rootx() + 20
+            y = widget.winfo_rooty() + 20
+            self._tooltip.wm_geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+    def _hide_tooltip(self):
+        if getattr(self, "_tooltip", None):
+            try:
+                self._tooltip.destroy()
+            except Exception:
+                pass
+            self._tooltip = None
 
     def select_slot(self, comp_index, key, variant=None):
         if self.selected_index is not None and self.selected_key is not None:
@@ -236,3 +282,12 @@ class ComponentSlotPanel(tk.Frame):
 
     def get_component_values(self):
         return self.component_widgets
+
+    def _on_mousewheel(self, event):
+        try:
+            delta = int(event.delta / 120)
+            move = -delta
+            self.canvas.yview_scroll(move, "units")
+        except Exception:
+            pass
+        return "break"
