@@ -146,6 +146,9 @@ class ModFileListPanel(tk.Frame):
         self._rows = []
 
     def set_file_list(self, file_list):
+        # None이 들어올 수 있으므로 안전하게 빈 리스트로 대체
+        if file_list is None:
+            file_list = []
         self.full_file_list = sorted(set(file_list))
 
         rows = None
@@ -156,10 +159,8 @@ class ModFileListPanel(tk.Frame):
             except Exception:
                 rows = None
 
-        if not rows:
-            rows = [("", "", fname) for fname in self.full_file_list]
-
-        self._rows = rows
+        # rows가 None일 수 있으므로 빈 리스트로 대체
+        self._rows = rows if rows is not None else []
         self.update_filtered_list()
 
     def update_filtered_list(self, *args):
