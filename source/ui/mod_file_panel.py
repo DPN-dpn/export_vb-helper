@@ -38,7 +38,21 @@ class ModFileListPanel(tk.Frame):
         # 회색 테두리 프레임 안에 흰 배경 라벨 배치
         hdr_frame = tk.Frame(filename_frame, bg="#888888")
         hdr_frame.pack(side="top", fill="x")
-        tk.Label(hdr_frame, text="파일명", anchor="center", justify="center", bg="white").pack(fill="both", expand=True, padx=1, pady=1)
+        self.filename_hdr_label = tk.Label(
+            hdr_frame,
+            text="파일명",
+            anchor="center",
+            justify="center",
+            bg="white",
+            cursor="hand2",
+            relief="flat",
+        )
+        self.filename_hdr_label.pack(fill="both", expand=True, padx=1, pady=1)
+        # 파일명 헤더: 호버/클릭 피드백 + 클릭 시 정렬
+        self.filename_hdr_label.bind("<Enter>", self._on_fname_enter)
+        self.filename_hdr_label.bind("<Leave>", self._on_fname_leave)
+        self.filename_hdr_label.bind("<ButtonPress-1>", self._on_fname_press)
+        self.filename_hdr_label.bind("<ButtonRelease-1>", self._on_fname_release)
         self.filename_list = tk.Listbox(filename_frame, exportselection=False)
         fname_hsb = ttk.Scrollbar(filename_frame, orient="horizontal")
         self.filename_list.configure(xscrollcommand=fname_hsb.set)
@@ -58,6 +72,10 @@ class ModFileListPanel(tk.Frame):
         self.tree.column("component", width=90, minwidth=90, anchor="w", stretch=False)
         self.tree.column("hash", width=90, minwidth=90, anchor="w", stretch=False)
         self.tree.grid(row=0, column=0, sticky="nsew")
+
+        # 헤더 클릭으로 정렬 (component, hash)
+        self.tree.heading("component", command=lambda: self._on_heading_click('component'))
+        self.tree.heading("hash", command=lambda: self._on_heading_click('hash'))
 
         # 가로스크롤 공간 맞춤용 여백
         spacer = tk.Frame(tree_area_frame, height=16)
@@ -92,58 +110,26 @@ class ModFileListPanel(tk.Frame):
         self.filename_list.bind("<Double-Button-1>", self.on_file_activate)
         self.filename_list.bind("<Return>", self.on_file_activate)
 
-        def _on_shift_wheel(event):
-            try:
-                delta = int(event.delta / 120)
-                self.filename_list.xview_scroll(-delta, "units")
-            except Exception:
-                pass
+        self.tree.bind("<Shift-MouseWheel>", self._on_shift_wheel)
+        self.filename_list.bind("<Shift-MouseWheel>", self._on_shift_wheel)
 
-        self.tree.bind("<Shift-MouseWheel>", _on_shift_wheel)
-        self.filename_list.bind("<Shift-MouseWheel>", _on_shift_wheel)
+        self.tree.bind("<MouseWheel>", self._on_vertical_mousewheel)
+        self.filename_list.bind("<MouseWheel>", self._on_vertical_mousewheel)
 
-        def _on_vertical_mousewheel(event):
-            try:
-                delta = int(event.delta / 120)
-                move = -delta
-                self.tree.yview_scroll(move, "units")
-                self.filename_list.yview_scroll(move, "units")
-            except Exception:
-                pass
-            return "break"
-
-        def _on_vertical_key(event):
-            ks = event.keysym
-            if ks == "Up":
-                self.tree.yview_scroll(-1, "units")
-                self.filename_list.yview_scroll(-1, "units")
-                return "break"
-            if ks == "Down":
-                self.tree.yview_scroll(1, "units")
-                self.filename_list.yview_scroll(1, "units")
-                return "break"
-            if ks == "Prior":
-                self.tree.yview_scroll(-1, "pages")
-                self.filename_list.yview_scroll(-1, "pages")
-                return "break"
-            if ks == "Next":
-                self.tree.yview_scroll(1, "pages")
-                self.filename_list.yview_scroll(1, "pages")
-                return "break"
-
-        self.tree.bind("<MouseWheel>", _on_vertical_mousewheel)
-        self.filename_list.bind("<MouseWheel>", _on_vertical_mousewheel)
-        self.tree.bind("<Up>", _on_vertical_key)
-        self.tree.bind("<Down>", _on_vertical_key)
-        self.tree.bind("<Prior>", _on_vertical_key)
-        self.tree.bind("<Next>", _on_vertical_key)
-        self.filename_list.bind("<Up>", _on_vertical_key)
-        self.filename_list.bind("<Down>", _on_vertical_key)
-        self.filename_list.bind("<Prior>", _on_vertical_key)
-        self.filename_list.bind("<Next>", _on_vertical_key)
+        self.tree.bind("<Up>", self._on_vertical_key)
+        self.tree.bind("<Down>", self._on_vertical_key)
+        self.tree.bind("<Prior>", self._on_vertical_key)
+        self.tree.bind("<Next>", self._on_vertical_key)
+        self.filename_list.bind("<Up>", self._on_vertical_key)
+        self.filename_list.bind("<Down>", self._on_vertical_key)
+        self.filename_list.bind("<Prior>", self._on_vertical_key)
+        self.filename_list.bind("<Next>", self._on_vertical_key)
 
         # 행 데이터: (컴포넌트, 해시, 파일명)
         self._rows = []
+        # 정렬 상태
+        self._sort_column = None
+        self._sort_reverse = False
 
     def set_file_list(self, file_list):
         # None이 들어올 수 있으므로 안전하게 빈 리스트로 대체
@@ -161,6 +147,7 @@ class ModFileListPanel(tk.Frame):
 
         # rows가 None일 수 있으므로 빈 리스트로 대체
         self._rows = rows if rows is not None else []
+        # 기본으로는 현재 정렬 상태를 유지하며 목록 갱신
         self.update_filtered_list()
 
     def update_filtered_list(self, *args):
@@ -169,12 +156,39 @@ class ModFileListPanel(tk.Frame):
             self.tree.delete(i)
         self.filename_list.delete(0, tk.END)
         self._displayed_rows = []
-        for orig_idx, (comp, hsh, fname) in enumerate(self._rows):
+        # 정렬 적용
+        rows = list(self._rows)
+        if self._sort_column:
+            key_idx = 0 if self._sort_column == 'component' else (1 if self._sort_column == 'hash' else 2)
+            try:
+                rows.sort(key=lambda r: (r[key_idx] or '').lower(), reverse=self._sort_reverse)
+            except Exception:
+                pass
+
+        for orig_idx, (comp, hsh, fname) in enumerate(rows):
             if fname.lower().endswith((".ib", ".buf", ".assets")) and keyword in fname.lower():
                 disp_idx = len(self._displayed_rows)
                 self._displayed_rows.append((comp, hsh, fname))
                 self.tree.insert("", "end", iid=str(disp_idx), values=(comp, hsh))
                 self.filename_list.insert(tk.END, fname)
+
+    def _on_heading_click(self, column):
+        """헤더 클릭 처리: 클릭한 컬럼을 기준으로 정렬.
+
+        - 처음 클릭 시 내림차순으로 정렬
+        - 같은 컬럼을 다시 클릭하면 오름/내림 전환
+        컬럼: 'component', 'hash', 'filename'
+        """
+        # 설정: 처음 클릭이면 내림차순(True)
+        if self._sort_column == column:
+            # toggle
+            self._sort_reverse = not self._sort_reverse
+        else:
+            self._sort_column = column
+            self._sort_reverse = False  # 기본은 오름차순
+
+        # 갱신
+        self.update_filtered_list()
 
     def on_file_selected(self, event):
         sel = None
@@ -231,3 +245,118 @@ class ModFileListPanel(tk.Frame):
                 self.controller.assign_selected_file()
             except Exception:
                 pass
+
+    # --- helper methods moved from __init__ for readability ---
+    def _on_fname_enter(self, event):
+        try:
+            self.filename_hdr_label.config(bg="#e6e6e6")
+        except Exception:
+            pass
+
+    def _on_fname_leave(self, event):
+        try:
+            self.filename_hdr_label.config(bg="white", relief="flat")
+        except Exception:
+            pass
+
+    def _on_fname_press(self, event):
+        try:
+            self.filename_hdr_label.config(relief="sunken")
+        except Exception:
+            pass
+
+    def _on_fname_release(self, event):
+        try:
+            self.filename_hdr_label.config(relief="flat")
+        except Exception:
+            pass
+        self._on_heading_click('filename')
+
+    def _vsb_cmd(self, *args):
+        try:
+            self.tree.yview(*args)
+        except Exception:
+            pass
+        try:
+            self.filename_list.yview(*args)
+        except Exception:
+            pass
+
+    def _on_shift_wheel(self, event):
+        try:
+            delta = int(event.delta / 120)
+            self.filename_list.xview_scroll(-delta, "units")
+        except Exception:
+            pass
+
+    def _on_vertical_mousewheel(self, event):
+        try:
+            delta = int(event.delta / 120)
+            move = -delta
+            self.tree.yview_scroll(move, "units")
+            self.filename_list.yview_scroll(move, "units")
+        except Exception:
+            pass
+        return "break"
+
+    def _on_vertical_key(self, event):
+        ks = event.keysym
+        # Up/Down: move selection in displayed list
+        if ks in ("Up", "Down"):
+            count = len(self._displayed_rows) if hasattr(self, '_displayed_rows') else 0
+            if count == 0:
+                return "break"
+
+            # determine current index from tree selection or listbox
+            cur_idx = None
+            try:
+                sel = self.tree.selection()
+                if sel:
+                    cur_idx = int(sel[0])
+            except Exception:
+                cur_idx = None
+
+            if cur_idx is None:
+                try:
+                    lsel = self.filename_list.curselection()
+                    if lsel:
+                        cur_idx = int(lsel[0])
+                except Exception:
+                    cur_idx = None
+
+            if cur_idx is None:
+                # if no selection, start at end for Up, start for Down
+                cur_idx = count - 1 if ks == 'Up' else 0
+            else:
+                cur_idx = max(0, min(count - 1, cur_idx + (-1 if ks == 'Up' else 1)))
+
+            # apply selection and ensure visible
+            try:
+                self.tree.selection_set(str(cur_idx))
+                self.tree.see(str(cur_idx))
+            except Exception:
+                pass
+            try:
+                self.filename_list.selection_clear(0, tk.END)
+                self.filename_list.selection_set(cur_idx)
+                self.filename_list.see(cur_idx)
+            except Exception:
+                pass
+
+            try:
+                comp, hsh, fname = self._displayed_rows[cur_idx]
+                self.controller.set_selected_file(fname)
+            except Exception:
+                pass
+
+            return "break"
+
+        # Page up/down: scroll pages
+        if ks == "Prior":
+            self.tree.yview_scroll(-1, "pages")
+            self.filename_list.yview_scroll(-1, "pages")
+            return "break"
+        if ks == "Next":
+            self.tree.yview_scroll(1, "pages")
+            self.filename_list.yview_scroll(1, "pages")
+            return "break"
