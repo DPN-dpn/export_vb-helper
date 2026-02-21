@@ -476,6 +476,9 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
         # 4-3-2단계: 'key = ' 로 시작하는 줄에서 값 내부의 '=' 문자를 '+'로 교체
         ini_content = _replace_key_equals_in_value(ini_content, logger)
 
+        # 4-3-3단계: >=, <= 조건문을 각각 (A > B || A == B), (A < B || A == B) 형태로 교체
+        ini_content = _replace_ge_le_conditions(ini_content, logger)
+
         with open(ini_path, 'w', encoding='utf-8') as f:
             f.write(ini_content)
         
@@ -523,6 +526,46 @@ def _replace_not_equal_conditions(ini_content, logger):
     if replaced_count > 0:
         logger.log(f"    != 조건문 {replaced_count}개 교체 완료")
     
+    return ini_content
+
+
+def _replace_ge_le_conditions(ini_content, logger):
+    """4-3-3단계: >=, <= 조건문을 각각
+    (A > B || A == B), (A < B || A == B) 형태로 교체"""
+    # 원본 내용 보관
+    original_content = ini_content
+
+    # >= 패턴 처리
+    pattern_ge = r'(\S+)\s*>=\s*(\S+)'
+
+    def _repl_ge(m):
+        left = m.group(1)
+        right = m.group(2)
+        replacement = f"({left} > {right} || {left} == {right})"
+        logger.log(f"    교체: {m.group(0)} -> {replacement}")
+        return replacement
+
+    ini_content = re.sub(pattern_ge, _repl_ge, ini_content)
+    ge_count = len(re.findall(pattern_ge, original_content))
+    if ge_count > 0:
+        logger.log(f"    >= 조건문 {ge_count}개 교체 완료")
+
+    # <= 패턴 처리 (>= 치환 후의 내용에서 검사)
+    original_after_ge = ini_content
+    pattern_le = r'(\S+)\s*<=\s*(\S+)'
+
+    def _repl_le(m):
+        left = m.group(1)
+        right = m.group(2)
+        replacement = f"({left} < {right} || {left} == {right})"
+        logger.log(f"    교체: {m.group(0)} -> {replacement}")
+        return replacement
+
+    ini_content = re.sub(pattern_le, _repl_le, ini_content)
+    le_count = len(re.findall(pattern_le, original_after_ge))
+    if le_count > 0:
+        logger.log(f"    <= 조건문 {le_count}개 교체 완료")
+
     return ini_content
 
 
