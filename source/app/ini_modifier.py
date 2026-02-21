@@ -373,6 +373,17 @@ def _step_4_1_1_prepare_and_tempize(ini_content, matched_pairs, moved_filenames,
             ini_content = ini_content.replace(f'[{orig_sec}]', f'[{temp_token}]')
             logger.log(f"    Resource 헤더 임시화: {orig_sec} -> {temp_token}")
 
+            # 또한 ini 전체에서 'key = value' 형태에서 value로 orig_sec가 사용된 경우
+            # 임시 토큰으로 바꿔 둔다. 따옴표가 있을 경우 보존한다.
+            val_pat = re.compile(r'(^\s*[^=\n]+\s*=\s*)(["\']?)%s(\2)(?=\s*$)' % re.escape(orig_sec), flags=re.IGNORECASE | re.MULTILINE)
+
+            def _val_repl(m, tt=temp_token):
+                quote = m.group(2) or ''
+                return m.group(1) + quote + tt + quote
+
+            ini_content = val_pat.sub(_val_repl, ini_content)
+            logger.log(f"    Resource 참조(값) 임시화 적용: {orig_sec} -> {temp_token}")
+
     # 이제 파일명(확장자 없는 형태)을 임시 문자열로 교체
     for idx, (slot_name, final_filename) in enumerate(matched_pairs):
         moved_filename = moved_filenames[idx]
@@ -406,6 +417,16 @@ def _step_4_1_2_apply_final_replacements(ini_content, temp_strings, resource_sec
                 # 문자열 단순 교체로 변경
                 ini_content = ini_content.replace(f'[{temp_token}]', f'[{final_resource}]')
                 logger.log(f"    Resource명 변경: {orig_sec} -> {final_resource}")
+
+                # value로 사용되던 temp_token도 final_resource로 치환 (따옴표 보존)
+                val_pat = re.compile(r'(["\']?)%s(\1)' % re.escape(temp_token))
+
+                def _val_repl2(m, fr=final_resource):
+                    quote = m.group(1) or ''
+                    return quote + fr + quote
+
+                ini_content = val_pat.sub(_val_repl2, ini_content)
+                logger.log(f"    Resource 참조(값) 치환: {temp_token} -> {final_resource}")
 
     return ini_content
 
