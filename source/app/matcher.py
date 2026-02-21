@@ -118,7 +118,7 @@ class ComponentMatcherApp:
 
         # 2. 리소스(.ib/.buf) 목록 생성
         self.mod_resource_files = [
-            f for f in mod_files if f.lower().endswith((".ib", ".buf"))
+            f for f in mod_files if f.lower().endswith((".ib", ".buf", ".assets"))
         ]
         self.ui.log(f"모드 리소스(.ib/.buf) 발견: {len(self.mod_resource_files)}개")
 
@@ -267,13 +267,13 @@ class ComponentMatcherApp:
                     k = key.lower()
                     comp = None
                     if k == "ib":
-                        comp = "ib"
+                        comp = "IB"
                     elif k == "vb0":
-                        comp = "position"
+                        comp = "Position"
                     elif k == "vb2":
-                        comp = "blend"
+                        comp = "Blend"
                     elif k == "vb1":
-                        comp = "texcoord"
+                        comp = "Texcoord"
 
                     if comp:
                         # 컴포넌트 선언이 있는 섹션에서 hash 추출

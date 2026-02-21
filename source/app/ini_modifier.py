@@ -135,6 +135,13 @@ def _move_files_to_top(output_mod_path, matched_pairs, ib_slots, logger):
         new_name = _process_matched_file(output_mod_path, slot_name, matched_file)
         matched_pairs[idx] = (slot_name, new_name)
 
+    # 매칭된 파일 처리 후 .assets 전처리 (예: .assets -> .buf 등)
+    # .assets로 잘못 설정된 파일의 확장자를 교체하고 matched_pairs에 반영
+    try:
+        matched_pairs = _preprocess_assets_files(output_mod_path, matched_pairs, ini_files, ib_slots, logger)
+    except Exception:
+        logger.log("    .assets 전처리 중 예외 발생 (무시합니다)")
+
     # ini 파일 이동 (기존 동작 유지)
     for idx, ini_file in enumerate(ini_files):
         src_path = os.path.join(output_mod_path, ini_file)
@@ -173,24 +180,84 @@ def _update_ini_file_paths(output_mod_path, ini_files, matched_pairs, original_p
         
         for idx, original_path in enumerate(original_paths):
             new_filename = matched_pairs[idx][1]
-            
+
+            # 후보 패턴: 원본 경로(슬래시 변형 포함) 및 basename
             patterns = [
                 original_path,
                 original_path.replace('/', '\\'),
                 original_path.replace('\\', '/'),
+                os.path.basename(original_path),
             ]
-            
+
             for pattern in patterns:
-                # replacement 문자열에서 '\1'과 파일명 바로 뒤에 숫자가 올 경우
-                # '\18' 같은 잘못된 그룹 참조로 해석되는 문제가 있어,
-                # 서브 함수로 처리하여 그룹을 안전하게 결합한다.
-                pat = re.compile(r'(filename\s*=\s*)(%s)' % re.escape(pattern), flags=re.IGNORECASE)
-                ini_content = pat.sub(lambda m, nf=new_filename: m.group(1) + nf, ini_content)
+                # filename = 값에서 패턴을 찾을 때 값이 따옴표로 둘러싸여 있을 수 있으므로
+                # 따옴표를 포함하거나 포함하지 않는 경우 모두 매치하도록 그룹을 구성한다.
+                # 치환 시 기존 따옴표(있다면)를 보존하도록 처리한다.
+                pat = re.compile(r'(filename\s*=\s*)(["\']?%s["\']?)' % re.escape(pattern), flags=re.IGNORECASE)
+
+                def _repl(m, nf=new_filename):
+                    val = m.group(2)
+                    if len(val) >= 2 and ((val[0] == '"' and val[-1] == '"') or (val[0] == "'" and val[-1] == "'")):
+                        return m.group(1) + val[0] + nf + val[-1]
+                    return m.group(1) + nf
+
+                ini_content = pat.sub(_repl, ini_content)
         
         with open(ini_path, 'w', encoding='utf-8') as f:
             f.write(ini_content)
         
         logger.log(f"ini 파일 경로 수정 완료: {new_ini_filename}")
+
+
+def _preprocess_assets_files(output_mod_path, matched_pairs, ini_files, ib_slots, logger):
+    """3-0단계: .assets 파일을 슬롯 유형에 맞게 확장자 교체
+
+    - IB 슬롯이면 .assets -> .ib
+    - Blend/Position/Texcoord이면 .assets -> .buf
+    주의: 이 함수는 INI 파일을 직접 수정하지 않습니다. 매칭 리스트(`matched_pairs`)의
+    파일명을 변경된 이름(basename)으로 갱신하여 반환합니다. INI 수정은 이후 단계가 담당합니다.
+    반환: 업데이트된 matched_pairs
+    """
+    updated = []
+
+    for slot_name, filename in matched_pairs:
+        if not filename or not filename.lower().endswith('.assets'):
+            updated.append((slot_name, filename))
+            continue
+
+        base = os.path.splitext(filename)[0]
+
+        # IB 슬롯이면 .ib, 특정 서브파일이면 .buf
+        if slot_name in ib_slots:
+            new_ext = '.ib'
+        elif any(x in slot_name for x in ("Blend", "Position", "Texcoord")):
+            new_ext = '.buf'
+        else:
+            logger.log(f"    .assets 보류 (슬롯 미확인): {slot_name} -> {filename}")
+            updated.append((slot_name, filename))
+            continue
+
+        new_name = f"{base}{new_ext}"
+        src = os.path.join(output_mod_path, filename)
+        dst = os.path.join(output_mod_path, new_name)
+
+        if os.path.exists(src):
+            counter = 1
+            final_dst = dst
+            final_name = new_name
+            while os.path.exists(final_dst):
+                final_name = f"{base}_{counter}{new_ext}"
+                final_dst = os.path.join(output_mod_path, final_name)
+                counter += 1
+
+            os.rename(src, final_dst)
+            logger.log(f"    .assets -> {new_ext} 교체: {filename} -> {os.path.basename(final_dst)}")
+            updated.append((slot_name, os.path.basename(final_dst)))
+        else:
+            logger.log(f"    파일 없음(.assets 처리 건너뜀): {filename}")
+            updated.append((slot_name, filename))
+
+    return updated
 
 
 def _rename_to_temp_files(output_mod_path, matched_pairs, logger):
@@ -221,10 +288,10 @@ def _rename_to_final_files(output_mod_path, matched_pairs, logger):
     for idx, (slot_name, temp_filename) in enumerate(matched_pairs):
         ext = os.path.splitext(temp_filename)[1]
         final_filename = f"{slot_name}{ext}"
-        
+
         temp_path = os.path.join(output_mod_path, temp_filename)
         final_path = os.path.join(output_mod_path, final_filename)
-        
+
         counter = 1
         base_name, ext = os.path.splitext(final_filename)
         while os.path.exists(final_path):

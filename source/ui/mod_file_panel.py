@@ -170,7 +170,7 @@ class ModFileListPanel(tk.Frame):
         self.filename_list.delete(0, tk.END)
         self._displayed_rows = []
         for orig_idx, (comp, hsh, fname) in enumerate(self._rows):
-            if fname.lower().endswith((".ib", ".buf")) and keyword in fname.lower():
+            if fname.lower().endswith((".ib", ".buf", ".assets")) and keyword in fname.lower():
                 disp_idx = len(self._displayed_rows)
                 self._displayed_rows.append((comp, hsh, fname))
                 self.tree.insert("", "end", iid=str(disp_idx), values=(comp, hsh))
