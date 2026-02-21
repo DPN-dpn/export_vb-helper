@@ -2,6 +2,8 @@ import os
 import subprocess
 import platform
 import tkinter as tk
+from tkinter import filedialog
+import threading
 
 from ui.path_selector import PathSelectorFrame
 from ui.component_slot_panel import ComponentSlotPanel
@@ -10,6 +12,7 @@ from ui.logger_frame import LoggerFrame
 
 from app import ini_modifier
 from app.auto_fill import auto_fill_components
+from app.export_to_export_vb import run_export_vb
 from config import load_config, save_config
 
 
@@ -88,13 +91,18 @@ class MainLayout:
         # 하단 프레임: 내보내기 버튼 + 로그 영역
         self.bottom_frame = tk.Frame(self.vertical_pane)
 
-        # 내보내기 버튼
+        # 내보내기 버튼 및 연결 버튼
         self.export_frame = tk.Frame(self.bottom_frame, height=40)
         self.export_frame.pack_propagate(False)
-        self.export_button = tk.Button(
-            self.export_frame, text="내보내기", command=self.export
-        )
-        self.export_button.pack(pady=5, padx=10, fill="x")
+
+        # 내보내기 버튼 (왼쪽, 넓게)
+        self.export_button = tk.Button(self.export_frame, text="내보내기", command=self.export)
+        self.export_button.pack(side="left", pady=5, padx=(10, 5), fill="x", expand=True)
+
+        # 작게 오른쪽에 배치할 '엵툵' 버튼
+        self.connect_button = tk.Button(self.export_frame, text="엵툵", width=6, command=self.connect_export_vb)
+        self.connect_button.pack(side="right", pady=5, padx=(5, 10))
+
         self.export_frame.pack(side="top", fill="x")
 
         # 로그 영역
@@ -117,6 +125,16 @@ class MainLayout:
                 self.path_selector_mod.mod_display_var.set(self.last_mod_folder)
             self.path_selector_mod.update_mod_options()
         self.path_selector = self
+
+        # 시작 시 config에 저장된 export_vb 경로로 자동 연결 시도
+        try:
+            evb_path = self.config.get("export_vb_path")
+            if evb_path:
+                # normalize
+                evb_path = os.path.normpath(evb_path)
+                self._try_connect_export_vb(evb_path)
+        except Exception:
+            pass
 
     def set_matcher(self, matcher):
         self.matcher = matcher
@@ -201,6 +219,131 @@ class MainLayout:
         except Exception as e:
             self.log(f"[오류] 슬롯에 파일 할당 중 오류 발생: {e}")
 
+    def connect_export_vb(self):
+        """폴더를 선택하고 해당 폴더에 export_vb.py가 있는지 확인하여
+        성공 시 로그를 남기고 config에 저장한다.
+        """
+        try:
+            folder = filedialog.askdirectory(title="엵툵 폴더 선택")
+            if not folder:
+                return
+
+            candidate = os.path.join(folder, "export_vb.py")
+            if os.path.isfile(candidate):
+                self.log(f"연결 성공: export_vb.py 발견됨 -> {folder}")
+                # config에 저장
+                try:
+                    save_config({"export_vb_path": folder})
+                    self.config["export_vb_path"] = folder
+                    self.log("설정에 경로 저장 완료")
+                    # 연결 성공 시 내보내기 버튼을 엵툵 전용으로 변경
+                    try:
+                        self.export_button.config(text="엵툵으로 내보내기", command=self.export_to_export_vb)
+                        self.log("내보내기 버튼이 '엵툵으로 내보내기'로 변경되었습니다")
+                    except Exception:
+                        pass
+                except Exception as e:
+                    self.log(f"설정 저장 실패: {e}")
+            else:
+                self.log(f"연결 실패: 선택한 폴더에 export_vb.py가 없습니다 -> {folder}")
+                self._clear_export_vb_connection()
+        except Exception as e:
+            self.log(f"export_vb 연결 중 오류: {e}")
+            self._clear_export_vb_connection()
+
+    def _try_connect_export_vb(self, folder: str) -> bool:
+        """config에 저장된 폴더로 자동 연결 시도 (대화상자 없음).
+        성공하면 버튼을 변경하고 config를 정규화하여 저장한다.
+        반환: 연결 성공 여부
+        """
+        try:
+            if not folder or not os.path.isdir(folder):
+                self.log(f"엵툵 경로 무효: {folder}")
+                return False
+
+            candidate = os.path.join(folder, "export_vb.py")
+            if os.path.isfile(candidate):
+                self.log(f"자동 연결 성공: export_vb.py 발견 -> {folder}")
+                # config에 정규화된 경로 저장
+                try:
+                    save_config({"export_vb_path": os.path.normpath(folder)})
+                    self.config["export_vb_path"] = os.path.normpath(folder)
+                except Exception:
+                    pass
+
+                try:
+                    self.export_button.config(text="엵툵으로 내보내기", command=self.export_to_export_vb)
+                except Exception:
+                    pass
+                return True
+            else:
+                self.log(f"자동 연결 실패: export_vb.py 없음 -> {folder}")
+                self._clear_export_vb_connection()
+                return False
+        except Exception as e:
+            self.log(f"자동 연결 중 오류: {e}")
+            return False
+
+    def _clear_export_vb_connection(self) -> None:
+        """설정에 저장된 export_vb 연결 정보를 제거하고
+        내보내기 버튼을 원래대로 복구합니다."""
+        try:
+            save_config({"export_vb_path": ""})
+            self.config["export_vb_path"] = ""
+        except Exception:
+            pass
+
+        try:
+            self.config.pop("export_vb_path", None)
+        except Exception:
+            pass
+
+        try:
+            self.export_button.config(text="내보내기", command=self.export)
+        except Exception:
+            pass
+
+    def export_to_export_vb(self):
+        """엵툵으로 내보내기:
+        - 드롭다운에서 선택된 에셋 폴더를 엵툵의 asset(s) 폴더에 같은 이름으로 복사(없으면)
+        - 드롭다운에서 선택된 모드 폴더를 엵툵의 mods 폴더에 같은 이름으로 복사(없으면)
+        - 복사 완료 후 export_vb.py를 실행하고 출력 로그를 GUI에 표시
+        """
+        export_root = self.config.get("export_vb_path")
+        if not export_root or not os.path.isdir(export_root):
+            self.log("엵툵 경로가 설정되어 있지 않거나 존재하지 않습니다. 먼저 연결해 주세요.")
+            return
+
+        # export_vb.py 존재 확인; 없으면 설정 제거하고 버튼 복구
+        evb_file = os.path.join(export_root, "export_vb.py")
+        if not os.path.isfile(evb_file):
+            self.log("export_vb.py가 없음 - 연결 설정 제거")
+            self._clear_export_vb_connection()
+            return
+
+        asset_src = None
+        mod_src = None
+        try:
+            asset_src = self.asset_path_var.get()
+        except Exception:
+            asset_src = None
+        try:
+            mod_src = self.mod_path_var.get()
+        except Exception:
+            mod_src = None
+
+        # 먼저 기존 내보내기(generate_ini)를 실행하여 output에 생성된 폴더를 mods 복사 소스로 사용
+        def _task():
+            output_root_cfg = self.config.get("output_root", "output")
+            # run_export_vb 내부에서 generate_ini를 호출하므로 단순 위임
+            try:
+                run_export_vb(export_root, asset_src, mod_src, slot_panel=self.slot_panel, output_root_cfg=output_root_cfg, log_callback=self.log)
+            except Exception as e:
+                self.log(f"엵툵 복사/실행 중 오류: {e}")
+
+        thread = threading.Thread(target=_task, daemon=True)
+        thread.start()
+
     def display_components(self, components, mod_files):
         self.slot_panel.display_components(components, mod_files)
         self.file_panel.set_file_list(mod_files)
@@ -251,13 +394,10 @@ class MainLayout:
                 asset_path, mod_path, self.slot_panel, output_root, self.logger
             )
             self.log("내보내기 완료")
-            if self.config.get("open_after_export", True):
-                if platform.system() == "Windows":
-                    subprocess.Popen(f'explorer "{output_path}"')
-                elif platform.system() == "Darwin":
-                    subprocess.Popen(["open", output_path])
-                else:
-                    subprocess.Popen(["xdg-open", output_path])
+            try:
+                subprocess.Popen(f'explorer "{output_path}"')
+            except Exception as e:
+                self.log(f"결과 폴더 열기 실패: {e}")
         except Exception as e:
             tb = traceback.extract_tb(e.__traceback__)
             last = tb[-1]
