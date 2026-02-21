@@ -1,22 +1,29 @@
 ## 이 프로그램은 생성형AI의 도움을 통해 만들어 졌음을 알려드립니다.
 
 # 미리보기
-![Image](https://github.com/user-attachments/assets/e5cc1404-3931-468d-b7e2-595621d38062)
+
+
+https://github.com/user-attachments/assets/c9bff7aa-6ac2-4b86-83a3-b45ed3320c41
+
+
 
 
 # 기능
-xxmi 모드파일 추출용 프로그램인 export_vb.py를 사용하기 편하도록 하는 파일명 매칭 도움 및 ini 내용 정리용 프로그램
+xxmi 모드파일 추출용 프로그램인 export_vb.py를 사용하기 편하도록 하는 파일명 매칭 도움 및 ini 전처리용 프로그램
 
 
 # 사용법
-### 1. launch.bat 실행
-<img width="701" height="512" alt="0" src="https://github.com/user-attachments/assets/d5600461-0907-410c-9865-6f9eb9055d25" />
+### 1. assets/mods 폴더에 준비물 에셋/모드 준비
+<img width="183" height="140" alt="1" src="https://github.com/user-attachments/assets/608455c1-504c-41e0-b377-791bf7ae418a" />
 
-### 2. 에셋 폴더와 모드 폴더 선택
-<img width="701" height="512" alt="1" src="https://github.com/user-attachments/assets/4b554738-9515-4c9f-bbe9-ac6462233f08" />
+### 2. launch.bat 실행, 상단 버튼과 드롭다운으로 처리할 에셋-모드 선택
+<img width="700" height="512" alt="2" src="https://github.com/user-attachments/assets/1fd8d733-c81e-481e-8ce3-597dacf58155" />
 
-### 3. 매칭할 슬롯 클릭 -> 모드 파일 더블클릭/엔터로 매칭, 전부 완료 후 내보내기
-![2](https://github.com/user-attachments/assets/e79c11f9-7f8a-4c7d-be15-0609ba1481be)
+### 3. 매칭할 슬롯 클릭 -> 모드 파일 더블클릭/엔터로 매칭
+![3](https://github.com/user-attachments/assets/dfabbf32-b0f3-4dd0-83c0-006195861dd3)
+
+### 4. 내보내기/export_vb 연결 후 내보내기
+![4](https://github.com/user-attachments/assets/15c74313-1409-430f-9b46-95d752fdd4db)
 
 
 # 라이센스
