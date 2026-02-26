@@ -361,6 +361,21 @@ def _step_4_1_1_prepare_and_tempize(ini_content, matched_pairs, moved_filenames,
                     logger.log(f"    Resource 섹션 매핑 발견: {sec_name} -> {resource_name} (filename={val})")
                     break
 
+    # 중복 최종 Resource명을 가진 원본 섹션들이 있을 수 있으므로 중복 처리
+    # final_resource -> [orig_sec1, orig_sec2, ...]
+    final_to_orig = {}
+    for orig_sec, final_res in resource_section_mappings.items():
+        final_to_orig.setdefault(final_res, []).append(orig_sec)
+
+    # 중복된 경우 두번째 이후 섹션은 제거 대상으로 표시 (참조는 첫 번째로 통일)
+    resource_sections_to_drop = []
+    for final_res, orig_list in final_to_orig.items():
+        if len(orig_list) > 1:
+            # keep first, drop others
+            to_drop = orig_list[1:]
+            resource_sections_to_drop.extend(to_drop)
+            logger.log(f"    중복 Resource 발견: {final_res} <- {orig_list} (추가 섹션 제거 예정: {to_drop})")
+
     # Resource 섹션 헤더를 임시 토큰으로 교체하기 위한 맵 생성
     resource_temp_tokens = {}
     for orig_sec in resource_section_mappings.keys():
@@ -396,10 +411,10 @@ def _step_4_1_1_prepare_and_tempize(ini_content, matched_pairs, moved_filenames,
         logger.log(f"    임시 교체: {moved_name_no_ext} -> {temp_str}")
         ini_content = ini_content.replace(moved_name_no_ext, temp_str)
 
-    return ini_content, temp_strings, resource_section_mappings, resource_temp_tokens
+    return ini_content, temp_strings, resource_section_mappings, resource_temp_tokens, resource_sections_to_drop
 
 
-def _step_4_1_2_apply_final_replacements(ini_content, temp_strings, resource_section_mappings, resource_temp_tokens, logger):
+def _step_4_1_2_apply_final_replacements(ini_content, temp_strings, resource_section_mappings, resource_temp_tokens, resource_sections_to_drop, logger):
     """4-1-2단계: 임시 문자열을 최종 파일명으로 교체하고
     Resource 헤더용 임시 토큰을 최종 Resource명으로 교체한다.
     반환: ini_content
@@ -413,20 +428,41 @@ def _step_4_1_2_apply_final_replacements(ini_content, temp_strings, resource_sec
     if resource_section_mappings and resource_section_mappings.keys():
         for orig_sec, temp_token in resource_temp_tokens.items():
             final_resource = resource_section_mappings.get(orig_sec)
-            if final_resource:
-                # 문자열 단순 교체로 변경
-                ini_content = ini_content.replace(f'[{temp_token}]', f'[{final_resource}]')
-                logger.log(f"    Resource명 변경: {orig_sec} -> {final_resource}")
+            if not final_resource:
+                continue
 
-                # value로 사용되던 temp_token도 final_resource로 치환 (따옴표 보존)
+            # 만약 이 orig_sec가 제거 대상이면 섹션 전체를 삭제하고
+            # 섹션 참조(값)에 대해서는 final_resource로 치환한다.
+            if orig_sec in (resource_sections_to_drop or []):
+                # remove section range for the temp token
+                pattern = rf'\[{re.escape(temp_token)}\].*?(?=\n\[|\Z)'
+                ini_content = re.sub(pattern, '', ini_content, flags=re.DOTALL)
+                logger.log(f"    중복된 섹션 제거 (임시토큰): {orig_sec} -> 제거됨")
+
+                # 값(참조)으로 사용된 경우에는 final_resource로 치환 (따옴표 보존)
                 val_pat = re.compile(r'(["\']?)%s(\1)' % re.escape(temp_token))
 
-                def _val_repl2(m, fr=final_resource):
+                def _val_repl_drop(m, fr=final_resource):
                     quote = m.group(1) or ''
                     return quote + fr + quote
 
-                ini_content = val_pat.sub(_val_repl2, ini_content)
-                logger.log(f"    Resource 참조(값) 치환: {temp_token} -> {final_resource}")
+                ini_content = val_pat.sub(_val_repl_drop, ini_content)
+                logger.log(f"    중복 Resource 참조 치환: {temp_token} -> {final_resource}")
+                continue
+
+            # 정상적인 경우: 헤더 토큰을 최종 Resource명으로 바꿈
+            ini_content = ini_content.replace(f'[{temp_token}]', f'[{final_resource}]')
+            logger.log(f"    Resource명 변경: {orig_sec} -> {final_resource}")
+
+            # value로 사용되던 temp_token도 final_resource로 치환 (따옴표 보존)
+            val_pat = re.compile(r'(["\']?)%s(\1)' % re.escape(temp_token))
+
+            def _val_repl2(m, fr=final_resource):
+                quote = m.group(1) or ''
+                return quote + fr + quote
+
+            ini_content = val_pat.sub(_val_repl2, ini_content)
+            logger.log(f"    Resource 참조(값) 치환: {temp_token} -> {final_resource}")
 
     return ini_content
 
@@ -443,13 +479,13 @@ def _update_ini_file_contents(output_mod_path, ini_files, matched_pairs, moved_f
             ini_content = f.read()
         
         # 4-1-1단계: 매칭한 문자열 -> 임시 문자열로 교체
-        ini_content, temp_strings, resource_section_mappings, resource_temp_tokens = _step_4_1_1_prepare_and_tempize(
+        ini_content, temp_strings, resource_section_mappings, resource_temp_tokens, resource_sections_to_drop = _step_4_1_1_prepare_and_tempize(
             ini_content, matched_pairs, moved_filenames, logger
         )
 
         # 4-1-2단계: 임시 문자열 -> 최종 문자열로 교체
         ini_content = _step_4_1_2_apply_final_replacements(
-            ini_content, temp_strings, resource_section_mappings, resource_temp_tokens, logger
+            ini_content, temp_strings, resource_section_mappings, resource_temp_tokens, resource_sections_to_drop, logger
         )
         
         # 4-2단계: 특정 구문 삭제
@@ -763,13 +799,14 @@ def _remove_resource_sections_position_subfiles(ini_content, logger):
                     if next_line.startswith('[') and next_line.endswith(']'):
                         break
 
+                    # filename=을 찾더라도 섹션의 끝까지 계속 스캔한다.
+                    # (기존에는 filename을 찾으면 그 자리에서 멈춰 섹션의 나머지 라인이 남아버리는 문제가 있었음)
                     m = re.match(r'(?i)filename\s*=\s*(.*)', next_line)
                     if m:
                         val = m.group(1).strip()
                         if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
                             val = val[1:-1]
                         filename_value = val
-                        break
 
                     j += 1
 
