@@ -1,3 +1,7 @@
+## 블렌더용 애드온 버전이 릴리즈되었습니다.<br/>이후 업데이트는 블렌더용 애드온에서만 진행됩니다.
+### https://github.com/DPN-dpn/export_vb-helper-for-blender
+<br/>
+
 ## 이 프로그램은 생성형AI의 도움을 통해 만들어 졌음을 알려드립니다.
 
 # 미리보기
